@@ -33,6 +33,7 @@
   let autofillProgress = { active: false, stage: "", percent: 0, detail: "" };
   let autofillSummary = null;
   let autofillRunId = 0;
+  let autofillProgressTimer = null;
 
   const CONTROL_SELECTOR = [
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"])',
@@ -431,17 +432,28 @@
   }
 
   function setAutofillProgress(stage, percent, detail = "", active = true) {
+    const normalizedStage = normalizeText(stage || "", 80);
+    const now = Date.now();
+    const previous = autofillProgress || {};
+    const sameStage = previous.active && previous.stage === normalizedStage;
+    const step = getAutofillProgressStep(normalizedStage);
     autofillProgress = {
       active: Boolean(active),
-      stage: normalizeText(stage || "", 80),
+      stage: normalizedStage,
       percent: normalizeProgressPercent(percent),
-      detail: normalizeText(detail || "", 160)
+      detail: normalizeText(detail || "", 160),
+      stepIndex: step.index,
+      stepTotal: step.total,
+      stepLabel: step.label,
+      startedAt: previous.active && previous.startedAt ? previous.startedAt : now,
+      stageStartedAt: sameStage && previous.stageStartedAt ? previous.stageStartedAt : now
     };
 
     renderFloatingStatus();
     if (profilePanelVisible) {
       renderProfilePanel();
     }
+    updateAutofillProgressTimer();
   }
 
   function clearAutofillProgress(detail = "") {
@@ -451,6 +463,97 @@
     if (profilePanelVisible) {
       renderProfilePanel();
     }
+    updateAutofillProgressTimer();
+  }
+
+  function getAutofillProgressStep(stage) {
+    const text = normalizeText(stage || "", 80);
+    if (/读取本机资料|开始填写|扫描页面并准备填写/.test(text)) {
+      return { index: 1, total: 6, label: "准备本机资料" };
+    }
+    if (/扫描当前页面/.test(text)) {
+      return { index: 2, total: 6, label: "扫描当前页面" };
+    }
+    if (/分析页面结构|AI 分析页面结构/.test(text)) {
+      return { index: 3, total: 6, label: "理解页面结构" };
+    }
+    if (/匹配本地资料|AI 生成映射|整理匹配结果|匹配完成/.test(text)) {
+      return { index: 4, total: 6, label: "匹配你的资料" };
+    }
+    if (/写入匹配项/.test(text)) {
+      return { index: 5, total: 6, label: "写入表单" };
+    }
+    return { index: 6, total: 6, label: "完成复核" };
+  }
+
+  function updateAutofillProgressTimer() {
+    if (autofillProgress.active) {
+      if (!autofillProgressTimer) {
+        autofillProgressTimer = window.setInterval(() => {
+          renderFloatingStatus();
+          if (profilePanelVisible) {
+            renderProfilePanel();
+          }
+        }, 1000);
+      }
+      return;
+    }
+
+    if (autofillProgressTimer) {
+      window.clearInterval(autofillProgressTimer);
+      autofillProgressTimer = null;
+    }
+  }
+
+  function formatElapsedTime(startedAt) {
+    const start = Number(startedAt || 0);
+    if (!start) {
+      return "";
+    }
+    const seconds = Math.max(0, Math.floor((Date.now() - start) / 1000));
+    if (seconds < 1) {
+      return "";
+    }
+    if (seconds < 60) {
+      return `${seconds} 秒`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    return rest ? `${minutes} 分 ${rest} 秒` : `${minutes} 分钟`;
+  }
+
+  function getDisplayedProgressPercent() {
+    if (!autofillProgress.active) {
+      return 0;
+    }
+    const startedAt = Number(autofillProgress.startedAt || autofillProgress.stageStartedAt || Date.now());
+    const elapsedSeconds = Math.max(0, (Date.now() - startedAt) / 1000);
+    const eased = 1 - Math.exp(-elapsedSeconds / 75);
+    return Math.min(96, normalizeProgressPercent(eased * 96));
+  }
+
+  function getAutofillProgressTitle() {
+    if (!autofillProgress.active) {
+      return "";
+    }
+    const label = autofillProgress.stepLabel || autofillProgress.stage || "处理当前页面";
+    return /^正在/.test(label) ? label : `正在${label}`;
+  }
+
+  function getAutofillProgressDetail() {
+    if (!autofillProgress.active) {
+      return "";
+    }
+    const detail = autofillProgress.detail || "正在处理当前网页，请勿重复点击。";
+    const elapsed = formatElapsedTime(autofillProgress.stageStartedAt);
+    const isAiStage = /^AI\s/.test(autofillProgress.stage || "");
+    if (isAiStage && elapsed) {
+      return `${detail}，正在等待 API 响应，已等待 ${elapsed}`;
+    }
+    if (elapsed) {
+      return `${detail}，已处理 ${elapsed}`;
+    }
+    return detail;
   }
 
   function startAutofillRun(stage = "处理中") {
@@ -1645,9 +1748,15 @@
         background: #fff;
         color: #333;
       }
-      #${PANEL_ID} .arf-home {
+      #${PANEL_ID} .arf-home,
+      #${PANEL_ID} .arf-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 46px;
+        height: 28px;
         min-height: 28px;
-        padding: 0 9px;
+        padding: 0;
         border: 1px solid #ded6c8;
         border-radius: 8px;
         background: #fff;
@@ -1659,14 +1768,6 @@
         flex: none;
         align-items: center;
         gap: 6px;
-      }
-      #${PANEL_ID} .arf-toggle {
-        min-height: 28px;
-        border: 1px solid #ded6c8;
-        border-radius: 8px;
-        background: #fff;
-        color: #333;
-        cursor: pointer;
       }
       #${PANEL_ID} .arf-search {
         width: 100%;
@@ -1915,7 +2016,7 @@
         </div>
         <button class="arf-float-close" type="button" data-action="float-hide" title="隐藏">×</button>
       </div>
-      <div class="arf-float-privacy">隐私：AI 不接收资料值；资料只保存在本机；插件不会自动提交。</div>
+      <div class="arf-float-privacy">隐私：资料只保存在本机；插件不会自动提交。</div>
       <div class="arf-float-ai" data-role="float-ai" hidden>AI 正在分析页面字段</div>
       <div class="arf-float-progress" data-role="float-progress">
         <div class="arf-float-track">
@@ -1972,16 +2073,16 @@
 
     if (autofillProgress.active) {
       if (title) {
-        title.textContent = `${autofillProgress.percent || 0}% · ${autofillProgress.stage || "正在填写"}`;
+        title.textContent = getAutofillProgressTitle() || "正在填写";
       }
       if (detail) {
-        detail.textContent = autofillProgress.detail || "正在处理当前网页，请勿重复点击。";
+        detail.textContent = getAutofillProgressDetail();
       }
       if (progress) {
         progress.hidden = false;
       }
       if (fill) {
-        fill.style.width = `${autofillProgress.percent || 0}%`;
+        fill.style.width = `${getDisplayedProgressPercent()}%`;
       }
       if (chips) {
         chips.hidden = true;
@@ -1990,7 +2091,7 @@
       if (aiFlag) {
         aiFlag.hidden = !aiActive;
         if (aiActive) {
-          aiFlag.textContent = `${autofillProgress.stage || "AI 分析"} · 只发送字段目录，不发送资料值`;
+          aiFlag.textContent = "AI 阶段 · 不发送资料值";
         }
       }
       return;
@@ -3559,7 +3660,7 @@
       return { plan, status: "本机资料目录为空，已使用本地规则。", usedAi: false };
     }
 
-    setAutofillProgress("AI 生成映射", 76, "只发送字段目录，不发送资料值");
+    setAutofillProgress("AI 生成映射", 76, "正在匹配页面字段和本地资料目录");
     setProfilePanelStatus("正在调用 AI 识别字段语义。只发送字段目录，不发送资料值...");
     const response = await sendRuntimeMessage({
       type: "OJAF_MAP_FIELDS",
@@ -3585,7 +3686,7 @@
 
   async function enhanceScanWithAi(scan) {
     try {
-      setAutofillProgress("AI 分析页面结构", 50, "只发送字段信息，不发送资料值");
+      setAutofillProgress("AI 分析页面结构", 50, "正在识别字段名称和控件类型");
       setProfilePanelStatus("正在分析页面结构，只发送字段信息...");
       const response = await sendRuntimeMessage({
         type: "OJAF_ANALYZE_PAGE_STRUCTURE",
@@ -3672,7 +3773,7 @@
       let aiStatus = "未调用 AI。";
 
       try {
-        setAutofillProgress("AI 生成映射", 76, "只发送字段目录，不发送资料值");
+        setAutofillProgress("AI 生成映射", 76, "正在匹配页面字段和本地资料目录");
         const aiResult = await enhancePlanWithAi(scan, plan);
         plan = aiResult.plan || plan;
         aiStatus = aiResult.status || aiStatus;
@@ -4455,11 +4556,11 @@
     }
     if (progress && progressFill && progressStage && progressDetail) {
       progress.hidden = !autofillProgress.active;
-      progressFill.style.width = `${autofillProgress.percent || 0}%`;
+      progressFill.style.width = `${getDisplayedProgressPercent()}%`;
       progressStage.textContent = autofillProgress.active
-        ? `${autofillProgress.percent || 0}% · ${autofillProgress.stage || "处理中"}`
+        ? getAutofillProgressTitle() || "处理中"
         : "";
-      progressDetail.textContent = autofillProgress.detail || "";
+      progressDetail.textContent = autofillProgress.active ? getAutofillProgressDetail() : "";
     }
     if (status) {
       status.style.color = "#6f6a60";
@@ -4467,7 +4568,7 @@
       const adapter = getActiveSiteAdapter();
       const adapterLabel = adapter ? `${adapter.name || adapter.id || "通用"} · ` : "";
       if (autofillProgress.active) {
-        status.textContent = `${adapterLabel}${autofillProgress.stage || "正在处理"}，请不要重复点击。`;
+        status.textContent = `${adapterLabel}${getAutofillProgressTitle() || autofillProgress.stage || "正在处理"}，请不要重复点击。`;
       } else {
         status.textContent = activeSection
           ? `${adapterLabel}正在查看：${getProfileSectionTitle(activeSection) || activeSection.category}。内容可直接选中复制。`

@@ -51,14 +51,14 @@ function applyRuntimeState(state = {}, options = {}) {
 
   if (busy) {
     const progress = state.autofillProgress || {};
-    const stage = progress.stage || "扫描";
-    const percent = Number.isFinite(Number(progress.percent))
-      ? `${Math.max(0, Math.min(100, Math.round(progress.percent)))}%`
-      : "";
-    const aiNote = /^AI\s/.test(stage)
-      ? " 这是 AI 分析/映射阶段，资料值不会发送。"
+    const stageLabel = progress.stepLabel || progress.stage || "处理当前页面";
+    const stage = /^正在/.test(stageLabel) ? stageLabel : `正在${stageLabel}`;
+    const elapsed = formatElapsedTime(progress.stageStartedAt);
+    const aiActive = /^AI\s/.test(progress.stage || "");
+    const aiNote = aiActive
+      ? ` 这是 AI 分析/映射阶段，资料值不会发送${elapsed ? `，已等待 ${elapsed}` : ""}。`
       : " 如果已配置 API，AI 只会在分析和映射阶段参与。";
-    setStatus(`当前正在 ${stage}${percent ? `（${percent}）` : ""}，请勿重复点击。页面右下角会显示进度。${aiNote}`);
+    setStatus(`当前${stage}，请勿重复点击。页面右下角会显示进度。${aiNote}`);
     return;
   }
 
@@ -117,6 +117,23 @@ async function clearMarks() {
   } catch (error) {
     setStatus(`清除失败：${error.message}`, true);
   }
+}
+
+function formatElapsedTime(startedAt) {
+  const start = Number(startedAt || 0);
+  if (!start) {
+    return "";
+  }
+  const seconds = Math.max(0, Math.floor((Date.now() - start) / 1000));
+  if (seconds < 1) {
+    return "";
+  }
+  if (seconds < 60) {
+    return `${seconds} 秒`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest ? `${minutes} 分 ${rest} 秒` : `${minutes} 分钟`;
 }
 
 function setStatus(message, isError = false) {
