@@ -2,6 +2,10 @@
 
 [English README](README.en.md)
 
+<p align="center">
+  <img src="assets/openjobautofill-logo.png" alt="OpenJobAutofill" width="720" />
+</p>
+
 OpenJobAutofill 是一个带 AI 页面分析能力的网申表单填写扩展。你只需要在本机维护一份简历资料，之后打开招聘网站，点击 `开始填写`，它会扫描当前页面，用本地规则和可选 AI 理解字段含义，再把高置信度内容写入表单。
 
 它的重点不是“全自动投递”，而是把 AI 用在最适合的地方：理解不同网站五花八门的字段名称和页面结构，同时把简历具体内容留在本机。个人信息、教育经历、实习经历、项目经历、证书、奖项这些反复填写的内容，都可以交给它先填一遍。最后仍由你自己检查并提交。

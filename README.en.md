@@ -2,6 +2,10 @@
 
 [中文 README](README.md)
 
+<p align="center">
+  <img src="assets/openjobautofill-logo.png" alt="OpenJobAutofill" width="720" />
+</p>
+
 OpenJobAutofill is an AI-assisted browser extension for job application forms. You keep one resume profile locally, open a recruiting website, click `Start Filling`, and the extension scans the current page, uses local rules plus optional AI to understand field meanings, and writes high-confidence values into the form.
 
 It is not designed to be a fully automated job-submission bot. Its goal is to use AI where it helps most: understanding messy field names and page structures across different recruiting websites, while keeping your actual resume values on your device. Personal information, education, internships, projects, certificates, awards, and other common resume fields can be filled first, then reviewed and submitted by you.
