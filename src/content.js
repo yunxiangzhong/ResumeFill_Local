@@ -675,7 +675,7 @@
       return `正在尝试 AI ${phase || "增强"}，只发送字段目录，不发送资料值。`;
     }
     if (state?.used && state?.fallback) {
-      return `AI 部分参与${usedPhases ? `（${usedPhases}）` : ""}，失败步骤已回退本地规则${fallbackReasons ? `：${fallbackReasons}` : ""}。`;
+      return `AI 部分参与${usedPhases ? `（${usedPhases}）` : ""}，不可用步骤已回退本地规则${fallbackReasons ? `：${fallbackReasons}` : ""}。`;
     }
     if (state?.used) {
       return `AI 已参与${usedPhases ? `（${usedPhases}）` : ""}，写入仍在本地执行。`;
@@ -687,26 +687,6 @@
       return "AI 已尝试但未返回可用增强，本次继续使用本地规则。";
     }
     return "未调用 AI，本次使用本地规则。";
-  }
-
-  function getAutofillAiBadgeText(state = autofillAiState) {
-    const status = state?.status || "idle";
-    if (status === "trying") {
-      return "正在尝试 AI · 不发送资料值";
-    }
-    if (state?.used && state?.fallback) {
-      return "AI 部分参与 · 其余回退本地";
-    }
-    if (state?.used) {
-      return "AI 已参与 · 写入本地";
-    }
-    if (state?.fallback) {
-      return "AI 不可用 · 已回退本地规则";
-    }
-    if (status === "no-result" || state?.attempted) {
-      return "AI 无可用增强 · 使用本地规则";
-    }
-    return "";
   }
 
   function getAutofillModeBadgeText(state = autofillAiState, progress = autofillProgress) {
@@ -797,8 +777,7 @@
     return {
       ...state,
       fallbackReason,
-      message: normalizeText(aiUsage.message || getAutofillAiStatusText(state), 300),
-      badge: normalizeText(aiUsage.badge || getAutofillAiBadgeText(state), 80)
+      message: normalizeText(aiUsage.message || getAutofillAiStatusText(state), 300)
     };
   }
 
@@ -867,8 +846,7 @@
       autofillInProgress,
       autofillProgress: { ...autofillProgress },
       autofillSummary: autofillSummary ? { ...autofillSummary } : null,
-      autofillAi: getAutofillAiSnapshot(),
-      hasDebugSnapshot: Boolean(lastAutofillDebug)
+      autofillAi: getAutofillAiSnapshot()
     };
   }
 
@@ -1932,9 +1910,9 @@
         box-shadow: 0 0 0 4px rgba(245, 166, 35, 0.18) !important;
       }
       [${MARK_ATTR}="error"] {
-        outline: 2px solid #d64545 !important;
+        outline: 2px solid #f5a623 !important;
         outline-offset: 2px !important;
-        box-shadow: 0 0 0 4px rgba(214, 69, 69, 0.16) !important;
+        box-shadow: 0 0 0 4px rgba(245, 166, 35, 0.18) !important;
       }
       #${FLOAT_ID} {
         position: fixed;
@@ -2025,7 +2003,7 @@
       }
       #${FLOAT_ID} .arf-float-chips {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
         margin-top: 12px;
       }
@@ -2047,9 +2025,6 @@
       }
       #${FLOAT_ID} .arf-float-chip.is-warn strong {
         color: #bf7a18;
-      }
-      #${FLOAT_ID} .arf-float-chip.is-error strong {
-        color: #b23b3b;
       }
       #${FLOAT_ID} .arf-float-actions {
         display: flex;
@@ -2467,11 +2442,14 @@
   }
 
   function setAutofillSummary(summary) {
+    const failed = Number(summary?.failed || 0);
+    const skipped = Number(summary?.skipped || 0);
     autofillSummary = {
       attempted: Number(summary?.attempted || 0),
       filled: Number(summary?.filled || 0),
-      failed: Number(summary?.failed || 0),
-      skipped: Number(summary?.skipped || 0),
+      failed,
+      skipped,
+      pending: Number(summary?.pending ?? skipped + failed),
       total: Number(summary?.total || 0),
       message: normalizeText(summary?.message || "", 160),
       aiUsage: sanitizeAutofillAiUsage(summary?.aiUsage || getAutofillAiSnapshot())
@@ -2525,7 +2503,7 @@
       title.textContent = "填写完成";
     }
     if (detail) {
-      detail.textContent = summary.message || "请直接在页面上检查绿色、黄色和红色标记。";
+      detail.textContent = summary.message || "请直接在页面上检查绿色已填写和橙色待处理标记。";
     }
     if (progress) {
       progress.hidden = true;
@@ -2533,9 +2511,8 @@
     if (chips) {
       chips.hidden = false;
       chips.innerHTML = `
-        <div class="arf-float-chip is-ok"><strong>${summary.filled || 0}</strong>成功</div>
-        <div class="arf-float-chip is-warn"><strong>${summary.skipped || 0}</strong>需确认</div>
-        <div class="arf-float-chip is-error"><strong>${summary.failed || 0}</strong>失败</div>
+        <div class="arf-float-chip is-ok"><strong>${summary.filled || 0}</strong>已填写</div>
+        <div class="arf-float-chip is-warn"><strong>${summary.pending || 0}</strong>待处理</div>
       `;
     }
     if (aiFlag) {
@@ -4384,6 +4361,7 @@
       filled: Number(summary?.filled || 0),
       failed: Number(summary?.failed || 0),
       skipped: Number(summary?.skipped || 0),
+      pending: Number(summary?.pending ?? Number(summary?.failed || 0) + Number(summary?.skipped || 0)),
       total: Number(summary?.total || 0),
       message: normalizeText(summary?.message || "", 160),
       aiUsage: sanitizeAutofillAiUsage(summary?.aiUsage || getAutofillAiSnapshot())
@@ -4512,7 +4490,7 @@
     const entries = Array.isArray(plan?.entries) ? plan.entries : getCurrentProfileEntries();
     const profileCatalog = buildProfileCatalogFromEntries(entries);
     if (profileCatalog.fields.length === 0) {
-      return { plan, status: "本机资料目录为空，已使用本地规则。", usedAi: false };
+      return { plan };
     }
 
     setAutofillAiTrying("字段映射");
@@ -4535,9 +4513,7 @@
     setAutofillProgress("AI 生成映射", 86, `已合并 ${aiCandidates.length} 项`);
 
     return {
-      plan: enhancedPlan,
-      status: `AI 已映射 ${aiCandidates.length} 项，已和本地规则合并。`,
-      usedAi: true
+      plan: enhancedPlan
     };
   }
 
@@ -4557,7 +4533,7 @@
       if (hints.length === 0) {
         setAutofillAiNoResult("页面结构分析", "页面结构 AI 未返回字段增强结果");
         setAutofillProgress("分析页面结构", 60, "AI 未返回增强结果，继续使用本地规则");
-        return { scan, status: "AI 未返回页面结构增强结果。", usedAi: false };
+        return { scan };
       }
 
       const fieldMap = new Map((scan.fields || []).map((field) => [field.fieldId, field]));
@@ -4593,18 +4569,14 @@
             confidence: response.confidence || 0,
             notes: response.notes || []
           }
-        },
-        status: `AI 已识别页面结构 ${hints.length} 项。`,
-        usedAi: true
+        }
       };
     } catch (error) {
       setAutofillAiFallback("页面结构分析", error);
       setAutofillProgress("分析页面结构", 58, "AI 不可用，已回退本地规则");
       setProfilePanelStatus("页面结构 AI 不可用，已使用本地规则继续。");
       return {
-        scan,
-        status: `页面结构 AI 不可用，已回退本地规则：${formatErrorMessage(error)}`,
-        usedAi: false
+        scan
       };
     }
   }
@@ -4712,7 +4684,7 @@
           failed: 0,
           skipped: skippedCount || plan?.candidates?.length || 0,
           total: plan?.candidates?.length || 0,
-          message: "没有找到高置信度可直填字段，黄色标记需要人工确认。",
+          message: "没有找到高置信度可直填字段，橙色标记需要手动处理。",
           aiUsage
         };
         setAutofillSummary(summary);
@@ -4775,7 +4747,7 @@
 
     setProfilePanelStatus("正在把匹配项写入当前网页...");
     if (isCurrentAutofillRun(runId)) {
-        setAutofillProgress("写入匹配项", 94, `本地准备写入 ${autoFillCandidates.length} 项`);
+      setAutofillProgress("写入匹配项", 94, `本地准备写入 ${autoFillCandidates.length} 项`);
     }
     const results = [];
 
@@ -4800,7 +4772,7 @@
       }
 
       if (element) {
-        markElement(element, ok ? "filled" : "error", `自动填写: ${candidate.fieldLabel || candidate.sourceLabel || candidate.id}`);
+        markElement(element, ok ? "filled" : "uncertain", `${ok ? "自动填写" : "待处理"}: ${candidate.fieldLabel || candidate.sourceLabel || candidate.id}`);
       }
 
       if (isCurrentAutofillRun(runId)) {
@@ -4823,11 +4795,12 @@
       filled: filledCount,
       failed: failedCount,
       skipped: skippedCount,
+      pending: failedCount + skippedCount,
       total: plan?.candidates?.length || results.length,
-      message: `页面已标记：绿色为已填写，黄色为需确认，红色为失败。`,
+      message: `页面已标记：绿色为已填写，橙色为待处理。`,
       aiUsage: getAutofillAiSnapshot()
     };
-    setProfilePanelStatus(`已尝试写入 ${results.length} 项，成功 ${filledCount} 项，需人工确认 ${skippedCount} 项。`);
+    setProfilePanelStatus(`已自动填写 ${filledCount} 项，待处理 ${summary.pending} 项。`);
     setAutofillSummary(summary);
     updateAutofillDebugResults(summary, results);
     await persistProfilePanelState(getProfilePanelStateSnapshot());
@@ -4861,7 +4834,7 @@
       if (!element) {
         continue;
       }
-      markElement(element, "uncertain", `需要人工确认: ${candidate.fieldLabel || candidate.sourceLabel || candidate.id}`);
+      markElement(element, "uncertain", `待处理: ${candidate.fieldLabel || candidate.sourceLabel || candidate.id}`);
       count += 1;
       if (count % 12 === 0) {
         await sleep(0);

@@ -566,8 +566,19 @@ select:focus {
   line-height: 1.5;
 }
 
+.api-feedback.is-dirty {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.api-feedback.is-saved {
+  color: var(--green);
+  font-weight: 700;
+}
+
 .api-feedback.error {
   color: var(--red);
+  font-weight: 700;
 }
 
 .api-preview-box {

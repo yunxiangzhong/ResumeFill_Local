@@ -13,6 +13,7 @@ const fields = {
   customHeadersJson: document.getElementById("customHeadersJson"),
   customBodyTemplate: document.getElementById("customBodyTemplate"),
   customResponsePath: document.getElementById("customResponsePath"),
+  saveApiButton: document.getElementById("saveApiSettings"),
   saveProfileButton: document.getElementById("saveProfile"),
   profileSectionEditor: document.getElementById("profileSectionEditor"),
   profileNav: document.getElementById("profileNav"),
@@ -28,7 +29,22 @@ const fields = {
 
 const PROFILE_SCHEMA_VERSION = 2;
 const PROFILE_BACKUP_FORMAT = "OpenJobAutofillProfileBackup";
+const SAVE_API_LABEL = fields.saveApiButton?.textContent || "保存 API 设置";
 const SAVE_PROFILE_LABEL = fields.saveProfileButton?.textContent || "保存资料";
+const API_CONFIG_FIELD_KEYS = [
+  "apiMode",
+  "apiKey",
+  "model",
+  "useJsonResponseFormat",
+  "baseUrl",
+  "endpointPath",
+  "extraHeadersJson",
+  "customUrl",
+  "customMethod",
+  "customHeadersJson",
+  "customBodyTemplate",
+  "customResponsePath"
+];
 
 const RESUME_SECTION_GUIDE = [
   {
@@ -414,6 +430,9 @@ const STRUCTURED_RESUME_SECTIONS = [
 
 let activeProfileSectionKey = "";
 let profileSectionSyncFrame = 0;
+let apiHasUnsavedChanges = false;
+let apiSettingsLoaded = false;
+let savedApiConfigKey = "";
 let profileHasUnsavedChanges = false;
 let profileSaveFeedbackTimer = 0;
 let toastTimer = 0;
@@ -433,6 +452,7 @@ fields.modelPreset.addEventListener("change", () => {
   if (fields.modelPreset.value) {
     fields.model.value = fields.modelPreset.value;
     setInlineFeedback(`已选择候选模型：${fields.modelPreset.value}`);
+    setApiDirty("已选择候选模型，点击“保存 API 设置”后才会生效。");
   }
 });
 fields.model.addEventListener("input", syncModelPresetFromCurrentModel);
@@ -442,6 +462,7 @@ fields.apiMode.addEventListener("change", async () => {
 });
 fields.baseUrl.addEventListener("change", () => maybeAutoRefreshModelList());
 fields.customUrl.addEventListener("change", () => maybeAutoRefreshModelList());
+registerApiDirtyTracking();
 fields.profileFileInput.addEventListener("change", importProfileFromFile);
 fields.profileSectionEditor.addEventListener("input", handleProfileEditorInput);
 fields.profileSectionEditor.addEventListener("focusin", handleProfileSectionFocus);
@@ -452,7 +473,7 @@ window.addEventListener("resize", scheduleProfileSectionSync);
 loadSettings();
 
 window.addEventListener("beforeunload", (event) => {
-  if (!profileHasUnsavedChanges) {
+  if (!profileHasUnsavedChanges && !apiHasUnsavedChanges) {
     return;
   }
 
@@ -464,6 +485,7 @@ async function loadSettings() {
   try {
     const settings = await sendRuntimeMessage({ type: "OJAF_GET_SETTINGS" });
     applyApiConfig(settings.apiConfig);
+    setApiSaved("API 设置已加载，当前没有未保存修改。");
     renderProfileNav();
     renderProfileTips(RESUME_SECTION_GUIDE[0]?.key);
     renderProfileSectionEditor(getProfileV2FromSettings(settings));
@@ -496,6 +518,10 @@ function collectApiConfig() {
   validateJsonObject(fields.extraHeadersJson.value, "额外 Headers JSON");
   validateJsonObject(fields.customHeadersJson.value, "Custom Headers JSON");
 
+  return getApiConfigSnapshotFromFields();
+}
+
+function getApiConfigSnapshotFromFields() {
   return {
     mode: fields.apiMode.value,
     apiKey: fields.apiKey.value.trim(),
@@ -512,7 +538,74 @@ function collectApiConfig() {
   };
 }
 
+function getApiConfigKey(apiConfig = getApiConfigSnapshotFromFields()) {
+  return JSON.stringify(apiConfig);
+}
+
+function registerApiDirtyTracking() {
+  for (const key of API_CONFIG_FIELD_KEYS) {
+    const field = fields[key];
+    if (!field) {
+      continue;
+    }
+    field.addEventListener("input", () => setApiDirty());
+    field.addEventListener("change", () => setApiDirty());
+  }
+}
+
+function setApiDirty(message = "API 设置已修改，点击“保存 API 设置”后才会生效。") {
+  if (!apiSettingsLoaded) {
+    return;
+  }
+
+  const changed = getApiConfigKey() !== savedApiConfigKey;
+  if (!changed) {
+    apiHasUnsavedChanges = false;
+    updateApiSaveButton();
+    setInlineFeedback("API 设置已恢复到已保存状态。", false, "saved");
+    return;
+  }
+
+  const wasDirty = apiHasUnsavedChanges;
+  apiHasUnsavedChanges = true;
+  updateApiSaveButton();
+  setInlineFeedback(message, false, "dirty");
+  if (!wasDirty) {
+    setStatus("API 设置有未保存修改。自动填写仍会使用上次保存的 API 配置。");
+  }
+}
+
+function setApiSaved(message = "API 设置已保存到本机。", apiConfig = null) {
+  apiSettingsLoaded = true;
+  apiHasUnsavedChanges = false;
+  savedApiConfigKey = getApiConfigKey(apiConfig || getApiConfigSnapshotFromFields());
+  updateApiSaveButton();
+  setInlineFeedback(message, false, "saved");
+}
+
+function setApiSaving(isSaving) {
+  if (!fields.saveApiButton) {
+    return;
+  }
+  fields.saveApiButton.dataset.saving = isSaving ? "true" : "false";
+  updateApiSaveButton();
+}
+
+function updateApiSaveButton() {
+  if (!fields.saveApiButton) {
+    return;
+  }
+  const isSaving = fields.saveApiButton.dataset.saving === "true";
+  fields.saveApiButton.disabled = isSaving;
+  fields.saveApiButton.textContent = isSaving
+    ? "保存中..."
+    : apiHasUnsavedChanges
+      ? `${SAVE_API_LABEL}（有未保存修改）`
+      : SAVE_API_LABEL;
+}
+
 async function saveApiSettings() {
+  setApiSaving(true);
   try {
     const apiConfig = collectApiConfig();
     let apiPermissionGranted = true;
@@ -532,18 +625,20 @@ async function saveApiSettings() {
     if (!apiPermissionGranted) {
       const reason = apiPermissionError ? `：${apiPermissionError}` : "，测试连接时可以重新授权。";
       setStatus(`API 设置已保存，但还没有获得 API 域名访问权限${reason}`);
-      setInlineFeedback("API 设置已保存；如需使用 AI，请在测试连接时授权 API 域名。");
+      setApiSaved("API 设置已保存；如需使用 AI，请在测试连接时授权 API 域名。", apiConfig);
       showToast("API 设置已保存，AI 使用前还需要授权 API 域名。", "busy");
       return;
     }
 
     setStatus("API 设置保存成功。");
-    setInlineFeedback("API 设置已保存到本机。");
+    setApiSaved("API 设置已保存到本机。", apiConfig);
     showToast("API 设置已保存到本机。");
   } catch (error) {
     setStatus(`保存失败：${error.message}`, true);
     setInlineFeedback(`保存失败：${error.message}`, true);
     showToast(`保存失败：${error.message}`, "error");
+  } finally {
+    setApiSaving(false);
   }
 }
 
@@ -646,8 +741,19 @@ async function clearLocalData() {
 async function testConnection() {
   try {
     const apiConfig = collectApiConfig();
-    setStatus("正在测试连接，不会发送你的资料值...");
-    setInlineFeedback("正在测试连接...");
+    const usingUnsavedConfig = apiHasUnsavedChanges;
+    setStatus(
+      usingUnsavedConfig
+        ? "正在用当前未保存的 API 表单值测试连接；测试通过后仍需点击保存才会用于自动填写。"
+        : "正在测试连接，不会发送你的资料值..."
+    );
+    setInlineFeedback(
+      usingUnsavedConfig
+        ? "正在用未保存的 API 表单值测试连接..."
+        : "正在测试连接...",
+      false,
+      usingUnsavedConfig ? "dirty" : ""
+    );
     setApiPreview("");
     const hasApiPermission = await ensureApiHostPermissions(apiConfig, { prompt: true });
     if (!hasApiPermission) {
@@ -659,7 +765,13 @@ async function testConnection() {
       payload: { apiConfig }
     });
     setStatus("连接正常，响应预览已显示在 API 设置下方。");
-    setInlineFeedback(result.contentPreview ? "连接正常，响应预览见下方。" : "连接正常。");
+    setInlineFeedback(
+      usingUnsavedConfig
+        ? "连接正常；当前 API 设置尚未保存，请点击“保存 API 设置”后再用于自动填写。"
+        : result.contentPreview ? "连接正常，响应预览见下方。" : "连接正常。",
+      false,
+      usingUnsavedConfig ? "dirty" : "saved"
+    );
     setApiPreview(formatConnectionPreview(result));
   } catch (error) {
     setStatus(`测试失败：${error.message}`, true);
@@ -671,6 +783,7 @@ async function testConnection() {
 async function refreshModelList(options = {}) {
   try {
     const apiConfig = collectApiConfig();
+    const usingUnsavedConfig = apiHasUnsavedChanges;
     if (!shouldAttemptModelList(apiConfig)) {
       if (!options.silent) {
         const message = "当前配置还不能自动推断模型列表，请先补全 Base URL 或 Custom API URL。";
@@ -681,8 +794,18 @@ async function refreshModelList(options = {}) {
     }
 
     if (!options.silent) {
-      setStatus("正在刷新模型列表...");
-      setInlineFeedback("正在刷新模型列表...");
+      setStatus(
+        usingUnsavedConfig
+          ? "正在用当前未保存的 API 表单值刷新模型列表；刷新不会自动保存配置。"
+          : "正在刷新模型列表..."
+      );
+      setInlineFeedback(
+        usingUnsavedConfig
+          ? "正在用未保存的 API 表单值刷新模型列表..."
+          : "正在刷新模型列表...",
+        false,
+        usingUnsavedConfig ? "dirty" : ""
+      );
     }
 
     const hasApiPermission = await ensureApiHostPermissions(apiConfig, { prompt: !options.silent });
@@ -703,8 +826,9 @@ async function refreshModelList(options = {}) {
 
     const count = Array.isArray(result.models) ? result.models.length : 0;
     const message = count > 0 ? `已加载 ${count} 个模型候选，仍可手动输入任意模型名。` : "模型列表为空，仍可手动输入模型名。";
-    setStatus(message);
-    setInlineFeedback(message);
+    const suffix = usingUnsavedConfig ? " 当前 API 设置尚未保存，请点击“保存 API 设置”。" : "";
+    setStatus(`${message}${suffix}`);
+    setInlineFeedback(`${message}${suffix}`, false, usingUnsavedConfig ? "dirty" : "");
   } catch (error) {
     if (!options.silent) {
       setStatus(`刷新模型列表失败：${error.message}`, true);
@@ -1611,13 +1735,15 @@ function setStatus(message, isError = false) {
   fields.status.classList.toggle("error", isError);
 }
 
-function setInlineFeedback(message, isError = false) {
+function setInlineFeedback(message, isError = false, state = "") {
   if (!fields.apiFeedback) {
     return;
   }
 
   fields.apiFeedback.textContent = message;
   fields.apiFeedback.classList.toggle("error", isError);
+  fields.apiFeedback.classList.toggle("is-dirty", state === "dirty");
+  fields.apiFeedback.classList.toggle("is-saved", state === "saved");
 }
 
 function showToast(message, state = "saved", duration = 2800) {
