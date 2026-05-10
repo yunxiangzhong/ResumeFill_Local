@@ -23,6 +23,9 @@ const fields = {
   apiFeedback: document.getElementById("apiFeedback"),
   apiPreviewBox: document.getElementById("apiPreviewBox"),
   apiPreview: document.getElementById("apiPreview"),
+  checkUpdateButton: document.getElementById("checkUpdate"),
+  openUpdateButton: document.getElementById("openUpdatePage"),
+  updateFeedback: document.getElementById("updateFeedback"),
   toast: document.getElementById("toast"),
   status: document.getElementById("status")
 };
@@ -31,6 +34,7 @@ const PROFILE_SCHEMA_VERSION = 2;
 const PROFILE_BACKUP_FORMAT = "OpenJobAutofillProfileBackup";
 const SAVE_API_LABEL = fields.saveApiButton?.textContent || "保存 API 设置";
 const SAVE_PROFILE_LABEL = fields.saveProfileButton?.textContent || "保存资料";
+const CHECK_UPDATE_LABEL = fields.checkUpdateButton?.textContent || "检查更新";
 const API_CONFIG_FIELD_KEYS = [
   "apiMode",
   "apiKey",
@@ -467,10 +471,17 @@ fields.profileFileInput.addEventListener("change", importProfileFromFile);
 fields.profileSectionEditor.addEventListener("input", handleProfileEditorInput);
 fields.profileSectionEditor.addEventListener("focusin", handleProfileSectionFocus);
 fields.profileSectionEditor.addEventListener("click", handleStructuredProfileClick);
+fields.checkUpdateButton?.addEventListener("click", () => {
+  void checkUpdate();
+});
+fields.openUpdateButton?.addEventListener("click", () => {
+  void openUpdatePage();
+});
 window.addEventListener("scroll", scheduleProfileSectionSync, { passive: true });
 window.addEventListener("resize", scheduleProfileSectionSync);
 
 loadSettings();
+loadUpdateStatus();
 
 window.addEventListener("beforeunload", (event) => {
   if (!profileHasUnsavedChanges && !apiHasUnsavedChanges) {
@@ -736,6 +747,96 @@ async function clearLocalData() {
   } catch (error) {
     setStatus(`清空失败：${error.message}`, true);
   }
+}
+
+async function loadUpdateStatus() {
+  try {
+    const state = await sendRuntimeMessage({ type: "OJAF_GET_UPDATE_STATUS" });
+    renderUpdateStatus(state || {});
+  } catch (error) {
+    renderUpdateStatus({ status: "error", error: error.message });
+  }
+}
+
+async function checkUpdate() {
+  setUpdateChecking(true);
+  renderUpdateStatus({ status: "checking" });
+  try {
+    const state = await sendRuntimeMessage({
+      type: "OJAF_CHECK_FOR_UPDATE",
+      payload: { reason: "manual-options" }
+    });
+    renderUpdateStatus(state || {});
+    setStatus(state?.status === "available" ? "发现新版本，可打开 Release 页面更新。" : "更新检查完成。");
+  } catch (error) {
+    renderUpdateStatus({ status: "error", error: error.message });
+    setStatus(formatUpdateStatus({ status: "error", error: error.message }), true);
+  } finally {
+    setUpdateChecking(false);
+  }
+}
+
+async function openUpdatePage() {
+  try {
+    await sendRuntimeMessage({ type: "OJAF_OPEN_UPDATE_PAGE" });
+    setUpdateFeedback("已打开 Release 页面。更新前建议先导出资料备份；更新时不要卸载扩展，覆盖或重新加载后，本机资料和 API 设置会保留。", "saved");
+  } catch (error) {
+    setUpdateFeedback(`打开 Release 页面失败：${error.message}`, "error");
+  }
+}
+
+function setUpdateChecking(isChecking) {
+  if (!fields.checkUpdateButton) {
+    return;
+  }
+
+  fields.checkUpdateButton.disabled = isChecking;
+  fields.checkUpdateButton.textContent = isChecking ? "检查中..." : CHECK_UPDATE_LABEL;
+}
+
+function renderUpdateStatus(state = {}) {
+  setUpdateFeedback(formatUpdateStatus(state), getUpdateFeedbackTone(state.status));
+}
+
+function getUpdateFeedbackTone(status) {
+  if (status === "error") {
+    return "error";
+  }
+  if (status === "available") {
+    return "new";
+  }
+  if (status === "current") {
+    return "saved";
+  }
+  return "";
+}
+
+function setUpdateFeedback(message, state = "") {
+  if (!fields.updateFeedback) {
+    return;
+  }
+
+  fields.updateFeedback.textContent = message;
+  fields.updateFeedback.classList.toggle("error", state === "error");
+  fields.updateFeedback.classList.toggle("is-new", state === "new");
+  fields.updateFeedback.classList.toggle("is-saved", state === "saved");
+}
+
+function formatUpdateStatus(state = {}) {
+  if (state.status === "checking") {
+    return "正在检查 GitHub Release...";
+  }
+  if (state.status === "available") {
+    const version = state.latestVersion ? ` ${state.latestVersion}` : "";
+    return `发现新版本${version}。更新前建议先导出资料备份；点击“打开 Release 页面”下载更新。不要卸载扩展，覆盖或重新加载后，本机资料和 API 设置会保留。`;
+  }
+  if (state.status === "current") {
+    return `当前已是最新版本 ${state.currentVersion || chrome.runtime.getManifest().version}。`;
+  }
+  if (state.status === "error") {
+    return `检查更新失败：${state.error || "请稍后重试"}`;
+  }
+  return `当前版本 ${chrome.runtime.getManifest().version}。插件会定期检查 GitHub Release。`;
 }
 
 async function testConnection() {

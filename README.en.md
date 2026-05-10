@@ -21,6 +21,7 @@ If this project saves you time, a GitHub Star would be appreciated. Issues and f
 - Optional OpenAI-compatible API or custom API support for better page-field understanding.
 - AI only helps identify page fields and matching profile-field names, not your actual resume values.
 - Autofill results use two color marks: green for filled fields and orange for fields that still need attention.
+- GitHub Release update checks are supported; the extension icon shows `NEW` when a newer release is available.
 
 ## Installation
 
@@ -57,6 +58,12 @@ If you want better understanding of different recruiting websites, configure you
 
 The privacy boundary is explicit: AI requests contain the current page fields and local profile-field names only. They do not include your name, phone number, ID number, resume content, or other actual profile values. Value lookup and form filling happen locally in the browser.
 
+## Updates
+
+The extension periodically checks GitHub Releases. You can also click `Check for Updates` in the popup or settings page. If a newer release is available, the extension icon shows `NEW`; open the Release page and follow the release instructions to download and reload or replace the extension files.
+
+Before updating, export a profile backup from the settings page. Do not uninstall the extension before updating; as long as the same browser extension remains installed, your saved resume profile and API settings stay in local browser storage.
+
 ## Color Marks
 
 - Green: filled.
@@ -71,6 +78,7 @@ If the page refreshes, moves to another step, or dynamically loads new fields, c
 - Page scripts are injected only after you click the extension and interact with the current page.
 - The extension never clicks the final submit button automatically.
 - The extension never sends your actual resume values to AI.
+- Update checks only access this project's GitHub Releases and do not upload resume data.
 - Always review the page after autofill, especially IDs, contact information, dates, choice fields, and declaration fields.
 
 ## FAQ

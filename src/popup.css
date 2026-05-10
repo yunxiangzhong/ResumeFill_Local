@@ -150,6 +150,19 @@ button.ghost.full {
   white-space: pre-wrap;
 }
 
+.update-status {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.update-status.is-new {
+  color: #9a5b0a;
+  font-weight: 700;
+}
+
 .error {
   color: var(--danger);
 }

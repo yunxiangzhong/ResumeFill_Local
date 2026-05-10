@@ -24,16 +24,23 @@ const DEFAULT_PROFILE_V2 = {
 
 const STORAGE_KEYS = {
   profileV2: "profileV2",
-  apiConfig: "apiConfig"
+  apiConfig: "apiConfig",
+  updateState: "updateState"
 };
 
 const PROFILE_PANEL_STATE_KEY = "OJAF_PROFILE_PANEL_STATE";
 const MAX_PROFILE_PANEL_STATE_ITEMS = 20;
+const UPDATE_ALARM_NAME = "OJAF_CHECK_RELEASE_UPDATE";
+const UPDATE_CHECK_INTERVAL_MINUTES = 12 * 60;
+const UPDATE_REPOSITORY = "Br1an67/OpenJobAutofill";
+const UPDATE_LATEST_RELEASE_API = `https://api.github.com/repos/${UPDATE_REPOSITORY}/releases/latest`;
+const UPDATE_RELEASES_URL = `https://github.com/${UPDATE_REPOSITORY}/releases`;
 
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.local.get([
     STORAGE_KEYS.profileV2,
-    STORAGE_KEYS.apiConfig
+    STORAGE_KEYS.apiConfig,
+    STORAGE_KEYS.updateState
   ]);
   const next = {};
 
@@ -45,10 +52,31 @@ chrome.runtime.onInstalled.addListener(async () => {
     next[STORAGE_KEYS.apiConfig] = DEFAULT_API_CONFIG;
   }
 
+  if (!existing[STORAGE_KEYS.updateState]) {
+    next[STORAGE_KEYS.updateState] = createDefaultUpdateState();
+  }
+
   if (Object.keys(next).length > 0) {
     await chrome.storage.local.set(next);
   }
+
+  await setupUpdateAlarm().catch(() => undefined);
+  void checkForUpdate({ reason: "installed" }).catch(() => undefined);
 });
+
+chrome.runtime.onStartup?.addListener(() => {
+  void setupUpdateAlarm().catch(() => undefined);
+  void refreshUpdateBadge().catch(() => undefined);
+});
+
+chrome.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name === UPDATE_ALARM_NAME) {
+    void checkForUpdate({ reason: "alarm" }).catch(() => undefined);
+  }
+});
+
+void setupUpdateAlarm().catch(() => undefined);
+void refreshUpdateBadge().catch(() => undefined);
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || typeof message.type !== "string" || !message.type.startsWith("OJAF_")) {
@@ -90,6 +118,12 @@ async function handleMessage(message) {
       return listModels(message.payload || {});
     case "OJAF_TEST_CONNECTION":
       return testApi(message.payload || {});
+    case "OJAF_GET_UPDATE_STATUS":
+      return getUpdateState();
+    case "OJAF_CHECK_FOR_UPDATE":
+      return checkForUpdate({ reason: message.payload?.reason || "manual" });
+    case "OJAF_OPEN_UPDATE_PAGE":
+      return openUpdatePage(message.payload || {});
     default:
       throw new Error(`Unknown message type: ${message.type}`);
   }
@@ -124,6 +158,182 @@ async function saveSettings(payload) {
 async function clearSettings() {
   await chrome.storage.local.clear();
   return { cleared: true };
+}
+
+async function setupUpdateAlarm() {
+  if (!chrome.alarms?.create) {
+    return;
+  }
+
+  const existing = chrome.alarms.get
+    ? await chrome.alarms.get(UPDATE_ALARM_NAME)
+    : null;
+  if (existing) {
+    return;
+  }
+
+  await chrome.alarms.create(UPDATE_ALARM_NAME, {
+    delayInMinutes: 5,
+    periodInMinutes: UPDATE_CHECK_INTERVAL_MINUTES
+  });
+}
+
+function createDefaultUpdateState(patch = {}) {
+  return {
+    status: "unknown",
+    currentVersion: getCurrentVersion(),
+    latestVersion: "",
+    latestTag: "",
+    releaseName: "",
+    releaseUrl: UPDATE_RELEASES_URL,
+    publishedAt: "",
+    checkedAt: 0,
+    error: "",
+    reason: "",
+    ...patch
+  };
+}
+
+async function getUpdateState() {
+  const values = await chrome.storage.local.get([STORAGE_KEYS.updateState]);
+  const state = reconcileUpdateState({
+    ...createDefaultUpdateState(),
+    ...(values[STORAGE_KEYS.updateState] || {}),
+    currentVersion: getCurrentVersion()
+  });
+  await applyUpdateBadge(state);
+  return state;
+}
+
+async function checkForUpdate(options = {}) {
+  const reason = options.reason || "manual";
+  const currentVersion = getCurrentVersion();
+
+  try {
+    const response = await fetch(UPDATE_LATEST_RELEASE_API, {
+      method: "GET",
+      headers: {
+        accept: "application/vnd.github+json"
+      },
+      cache: "no-store"
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`GitHub Release 暂时不可用（HTTP ${response.status}）`);
+    }
+
+    const release = safeJsonParse(text);
+    const latestTag = String(release?.tag_name || "").trim();
+    const latestVersion = normalizeVersion(latestTag || release?.name || "");
+    if (!latestVersion) {
+      throw new Error("GitHub Release 没有返回有效版本号。");
+    }
+
+    const updateAvailable = compareVersions(latestVersion, currentVersion) > 0;
+    const state = createDefaultUpdateState({
+      status: updateAvailable ? "available" : "current",
+      currentVersion,
+      latestVersion,
+      latestTag,
+      releaseName: String(release?.name || latestTag || latestVersion),
+      releaseUrl: String(release?.html_url || UPDATE_RELEASES_URL),
+      publishedAt: String(release?.published_at || ""),
+      checkedAt: Date.now(),
+      error: "",
+      reason
+    });
+    await saveUpdateState(state);
+    return state;
+  } catch (error) {
+    const previous = await getUpdateState();
+    const errorMessage = formatUpdateCheckError(error);
+    const state = createDefaultUpdateState({
+      ...previous,
+      status: previous.status === "available" ? "available" : "error",
+      currentVersion,
+      checkedAt: Date.now(),
+      error: errorMessage,
+      reason
+    });
+    await saveUpdateState(state);
+    return state;
+  }
+}
+
+async function saveUpdateState(state) {
+  await chrome.storage.local.set({ [STORAGE_KEYS.updateState]: state });
+  await applyUpdateBadge(state);
+}
+
+async function refreshUpdateBadge() {
+  const state = await getUpdateState();
+  await applyUpdateBadge(state);
+}
+
+async function applyUpdateBadge(state) {
+  if (!chrome.action) {
+    return;
+  }
+
+  if (state?.status === "available") {
+    await chrome.action.setBadgeText({ text: "NEW" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#c37a18" });
+    return;
+  }
+
+  await chrome.action.setBadgeText({ text: "" });
+}
+
+async function openUpdatePage(payload = {}) {
+  const state = await getUpdateState();
+  const url = String(payload.url || state.releaseUrl || UPDATE_RELEASES_URL);
+  await chrome.tabs.create({ url });
+  return { opened: true, url };
+}
+
+function getCurrentVersion() {
+  return chrome.runtime.getManifest().version || "0.0.0";
+}
+
+function normalizeVersion(value) {
+  const match = String(value || "").trim().match(/v?(\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?)/);
+  return match ? match[1] : "";
+}
+
+function compareVersions(left, right) {
+  const leftParts = normalizeVersion(left).split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const rightParts = normalizeVersion(right).split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
+  const length = Math.max(leftParts.length, rightParts.length, 3);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (leftParts[index] || 0) - (rightParts[index] || 0);
+    if (diff !== 0) {
+      return diff > 0 ? 1 : -1;
+    }
+  }
+  return 0;
+}
+
+function reconcileUpdateState(state) {
+  if (!state.latestVersion) {
+    return state;
+  }
+
+  const comparison = compareVersions(state.latestVersion, state.currentVersion);
+  if (comparison > 0) {
+    return { ...state, status: "available" };
+  }
+  if (state.status === "available") {
+    return { ...state, status: "current", error: "" };
+  }
+  return state;
+}
+
+function formatUpdateCheckError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return "暂时无法连接 GitHub Release，请稍后重试。";
+  }
+  return message || "检查更新失败，请稍后重试。";
 }
 
 async function saveProfilePanelState(payload) {

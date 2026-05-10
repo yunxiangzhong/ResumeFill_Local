@@ -558,7 +558,8 @@ select:focus {
   margin-top: 14px;
 }
 
-.api-feedback {
+.api-feedback,
+.update-feedback {
   min-height: 1.5em;
   margin-top: 10px;
   color: var(--muted);
@@ -571,13 +572,20 @@ select:focus {
   font-weight: 700;
 }
 
-.api-feedback.is-saved {
+.api-feedback.is-saved,
+.update-feedback.is-saved {
   color: var(--green);
   font-weight: 700;
 }
 
-.api-feedback.error {
+.api-feedback.error,
+.update-feedback.error {
   color: var(--red);
+  font-weight: 700;
+}
+
+.update-feedback.is-new {
+  color: var(--amber);
   font-weight: 700;
 }
 

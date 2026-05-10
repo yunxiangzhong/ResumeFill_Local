@@ -80,6 +80,16 @@
       </section>
 
       <section class="grid settings-grid">
+        <section class="card update-card">
+          <h2>版本更新</h2>
+          <p class="hint">插件会定期检查 GitHub Release。发现新版本时，浏览器图标会显示 NEW；更新前建议先导出资料备份。更新时不要卸载扩展，覆盖或重新加载后，本机资料和 API 设置会保留。</p>
+          <div class="actions">
+            <button id="checkUpdate" class="secondary" type="button">检查更新</button>
+            <button id="openUpdatePage" class="ghost" type="button">打开 Release 页面</button>
+          </div>
+          <p id="updateFeedback" class="update-feedback" aria-live="polite">正在读取更新状态...</p>
+        </section>
+
         <form id="settingsForm" class="card">
           <h2>API 设置（可选，用于 AI 页面分析）</h2>
 

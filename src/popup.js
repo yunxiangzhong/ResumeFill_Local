@@ -3,10 +3,14 @@ const els = {
   openOptions: document.getElementById("openOptions"),
   startAutofillBtn: document.getElementById("startAutofillBtn"),
   showProfilePanelBtn: document.getElementById("showProfilePanelBtn"),
-  clearMarksBtn: document.getElementById("clearMarksBtn")
+  clearMarksBtn: document.getElementById("clearMarksBtn"),
+  updateStatus: document.getElementById("updateStatus"),
+  checkUpdateBtn: document.getElementById("checkUpdateBtn"),
+  openUpdateBtn: document.getElementById("openUpdateBtn")
 };
 
 const DEFAULT_START_LABEL = els.startAutofillBtn.textContent;
+const DEFAULT_CHECK_UPDATE_LABEL = els.checkUpdateBtn.textContent;
 
 els.openOptions.addEventListener("click", () => chrome.runtime.openOptionsPage());
 els.startAutofillBtn.addEventListener("click", () => {
@@ -18,12 +22,19 @@ els.showProfilePanelBtn.addEventListener("click", () => {
 els.clearMarksBtn.addEventListener("click", () => {
   void clearMarks();
 });
+els.checkUpdateBtn.addEventListener("click", () => {
+  void checkUpdate();
+});
+els.openUpdateBtn.addEventListener("click", () => {
+  void openUpdatePage();
+});
 
 initialize();
 
 async function initialize() {
   try {
     setStatus("点击开始填写后，右下角会实时显示当前是本地规则还是 AI；AI 不可用也能继续用本地规则填写。");
+    await syncUpdateStatus();
     await syncRuntimeState();
   } catch (error) {
     setStatus(`读取页面失败：${error.message}`, true);
@@ -114,6 +125,74 @@ async function clearMarks() {
   } catch (error) {
     setStatus(`清除失败：${error.message}`, true);
   }
+}
+
+async function syncUpdateStatus() {
+  try {
+    const state = await sendRuntimeMessage({ type: "OJAF_GET_UPDATE_STATUS" });
+    renderUpdateStatus(state || {});
+  } catch (error) {
+    renderUpdateStatus({ status: "error", error: error.message });
+  }
+}
+
+async function checkUpdate() {
+  els.checkUpdateBtn.disabled = true;
+  els.checkUpdateBtn.textContent = "检查中...";
+  renderUpdateStatus({ status: "checking" });
+  try {
+    const state = await sendRuntimeMessage({
+      type: "OJAF_CHECK_FOR_UPDATE",
+      payload: { reason: "manual-popup" }
+    });
+    renderUpdateStatus(state || {});
+  } catch (error) {
+    renderUpdateStatus({ status: "error", error: error.message });
+  } finally {
+    els.checkUpdateBtn.disabled = false;
+    els.checkUpdateBtn.textContent = DEFAULT_CHECK_UPDATE_LABEL;
+  }
+}
+
+async function openUpdatePage() {
+  try {
+    await sendRuntimeMessage({ type: "OJAF_OPEN_UPDATE_PAGE" });
+    renderUpdateStatus({
+      message: "已打开 Release 页面。更新前建议先到设置页导出资料备份；更新时不要卸载扩展，覆盖或重新加载后本机资料和 API 设置会保留。"
+    });
+  } catch (error) {
+    renderUpdateStatus({ status: "error", error: error.message });
+  }
+}
+
+function renderUpdateStatus(state = {}) {
+  if (!els.updateStatus) {
+    return;
+  }
+
+  els.updateStatus.textContent = formatUpdateStatus(state);
+  els.updateStatus.classList.toggle("is-new", state.status === "available");
+  els.updateStatus.classList.toggle("error", state.status === "error");
+}
+
+function formatUpdateStatus(state = {}) {
+  if (state.message) {
+    return state.message;
+  }
+  if (state.status === "checking") {
+    return "正在检查 GitHub Release...";
+  }
+  if (state.status === "available") {
+    const version = state.latestVersion ? ` ${state.latestVersion}` : "";
+    return `发现新版本${version}。更新前建议先到设置页导出资料备份；点击“打开 Release 页面”下载更新。不要卸载扩展，覆盖或重新加载后本机资料和 API 设置会保留。`;
+  }
+  if (state.status === "current") {
+    return `当前已是最新版本 ${state.currentVersion || chrome.runtime.getManifest().version}。`;
+  }
+  if (state.status === "error") {
+    return `检查更新失败：${state.error || "请稍后重试"}`;
+  }
+  return `当前版本 ${chrome.runtime.getManifest().version}。插件会定期检查 GitHub Release。`;
 }
 
 function formatRuntimeAiNote(aiUsage = {}, elapsed = "") {
@@ -230,6 +309,23 @@ function sendTabMessage(tabId, message) {
         return;
       }
       resolve(response);
+    });
+  });
+}
+
+function sendRuntimeMessage(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      if (!response?.ok) {
+        reject(new Error(response?.error || "Runtime message failed."));
+        return;
+      }
+      resolve(response.data);
     });
   });
 }
