@@ -82,6 +82,12 @@ const RESUME_SECTION_GUIDE = [
     tips: ["应届生没有正式工作经历可以留空。", "留空模块不会影响资料保存，后续需要时再补。"]
   },
   {
+    key: "performance",
+    title: "绩效考核",
+    aliases: ["年度绩效", "绩效信息"],
+    tips: ["社招或有正式工作经历时再填写，常见字段是考核年度、等级、排名和证明人。", "如果页面只有一两项绩效字段，也建议在这里单独维护，避免和普通工作经历证明人串填。"]
+  },
+  {
     key: "project",
     title: "项目经历/实践活动",
     aliases: ["项目经历", "实践活动"],
@@ -191,6 +197,8 @@ const STRUCTURED_RESUME_SECTIONS = [
       "籍贯",
       "生源地",
       "现居住城市",
+      "现居住详细地址",
+      "通讯地址",
       "邮政编码",
       "人事档案所在单位",
       "身高",
@@ -299,6 +307,21 @@ const STRUCTURED_RESUME_SECTIONS = [
       "证明人职位",
       "证明人联系方式",
       "离职原因"
+    ])
+  },
+  {
+    key: "performance",
+    title: "绩效考核",
+    kind: "repeat",
+    itemLabel: "绩效考核",
+    defaultItems: 1,
+    fields: profileFields([
+      "考核年度",
+      "绩效考核等级",
+      "年度绩效排名",
+      "绩效证明人",
+      "绩效证明人联系方式",
+      "绩效说明"
     ])
   },
   {

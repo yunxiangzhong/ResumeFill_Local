@@ -1,5 +1,5 @@
 (() => {
-  const SCRIPT_VERSION = "0.8.4-ai-state";
+  const SCRIPT_VERSION = "0.8.7-ai-first-cn";
 
   if (window.__OJAF_AUTOFILL_VERSION__ === SCRIPT_VERSION) {
     return;
@@ -58,6 +58,7 @@
       containerSelector: ".ant-form-item,.form-item,[class*='formItem'],[class*='FormItem'],[class*='field'],[class*='Field']",
       labelSelector: ".ant-form-item-label,label,[class*='label'],[class*='Label'],[class*='formLabel']",
       sectionSelector: ".ant-card-head-title,.ant-collapse-header,.form-section-title,[class*='sectionTitle'],[class*='module-title'],h2,h3,h4",
+      repeatItemSelector: ".ant-card,.ant-collapse-item,.resume-block,[class*='list-item'],[class*='resume-item'],[class*='record-item']",
       saveLabels: ["保存", "确定", "完成"],
       editLabels: ["编辑", "修改", "完善"]
     },
@@ -70,6 +71,7 @@
       containerSelector: ".form-item,.kuma-form-item,.uxcore-form-row,[class*='form-item'],[class*='field']",
       labelSelector: ".kuma-label,.form-label,label,[class*='label']",
       sectionSelector: ".module-title,.resume-title,.card-title,.uxcore-card-title-text,h2,h3,h4",
+      repeatItemSelector: ".resume-block,.uxcore-card,[class*='resume-item'],[class*='experience-item'],[class*='list-item']",
       saveLabels: ["保存", "确定", "提交"],
       editLabels: ["编辑", "修改"]
     },
@@ -82,8 +84,74 @@
       containerSelector: ".form-item,[class*='formItem'],[class*='field'],[class*='apply']",
       labelSelector: "label,[class*='label'],[class*='Label']",
       sectionSelector: "[class*='title'],[class*='Title'],h2,h3,h4",
+      repeatItemSelector: "[class*='resume-item'],[class*='experience-item'],[class*='list-item'],[class*='record-item']",
       saveLabels: ["保存", "确定"],
       editLabels: ["编辑", "修改"]
+    },
+    {
+      id: "moka",
+      name: "Moka 招聘",
+      urlPattern: /(?:^|\.)(?:mokahr|moka)\.com$/i,
+      confidence: 0.9,
+      indicators: [".ant-form-item", "[class*='application-form']", "[class*='questionnaire']", "[class*='schema-form']"],
+      containerSelector: ".ant-form-item,[class*='form-item'],[class*='field-wrapper'],[class*='question-item'],[class*='schema-form-item']",
+      labelSelector: ".ant-form-item-label,label,[class*='field-label'],[class*='question-label'],[class*='question-title']",
+      sectionSelector: ".ant-card-head-title,[class*='module-title'],[class*='questionnaire-title'],[class*='block-title'],h2,h3,h4",
+      repeatItemSelector: ".ant-card,[class*='resume-item'],[class*='experience-item'],[class*='list-item'],[class*='card-item']",
+      saveLabels: ["保存", "确定", "下一步", "完成"],
+      editLabels: ["编辑", "修改", "完善"]
+    },
+    {
+      id: "beisen",
+      name: "北森/iTalentX",
+      urlPattern: /(?:^|\.)beisen\.com$|(?:^|\.)italent\.cn$|(?:^|\.)italentx\.cn$|(?:^|\.)italentx\.com$/i,
+      confidence: 0.89,
+      indicators: [".el-form-item", ".ant-form-item", "[class*='resume-form']", "[class*='talent-form']", "[class*='bs-']"],
+      containerSelector: ".el-form-item,.ant-form-item,[class*='form-item'],[class*='resume-field'],[class*='field-row']",
+      labelSelector: ".el-form-item__label,.ant-form-item-label,label,[class*='field-label'],[class*='label']",
+      sectionSelector: ".el-card__header,[class*='block-title'],[class*='section-title'],[class*='module-title'],h2,h3,h4",
+      repeatItemSelector: ".el-card,[class*='resume-item'],[class*='experience-item'],[class*='list-item'],[class*='record-item']",
+      saveLabels: ["保存", "确定", "下一步", "完成"],
+      editLabels: ["编辑", "修改", "完善", "填写"]
+    },
+    {
+      id: "nowcoder",
+      name: "牛客网申",
+      urlPattern: /(?:^|\.)nowcoder\.com$/i,
+      confidence: 0.84,
+      indicators: [".ant-form-item", "[class*='questionnaire']", "[class*='resume-module']", "[class*='form-item']"],
+      containerSelector: ".ant-form-item,[class*='form-item'],[class*='question-item'],[class*='resume-field']",
+      labelSelector: ".ant-form-item-label,label,[class*='field-label'],[class*='question-title'],[class*='label']",
+      sectionSelector: ".ant-card-head-title,[class*='module-title'],[class*='questionnaire-title'],[class*='resume-title'],h2,h3,h4",
+      repeatItemSelector: ".ant-card,[class*='resume-item'],[class*='experience-item'],[class*='list-item']",
+      saveLabels: ["保存", "确定", "下一步", "完成"],
+      editLabels: ["编辑", "修改", "完善"]
+    },
+    {
+      id: "zhaopin",
+      name: "智联招聘",
+      urlPattern: /(?:^|\.)zhaopin\.com$/i,
+      confidence: 0.83,
+      indicators: [".ant-form-item", "[class*='resume-edit']", "[class*='questionnaire']", "[class*='form-item']"],
+      containerSelector: ".ant-form-item,[class*='form-item'],[class*='resume-field'],[class*='field-row']",
+      labelSelector: ".ant-form-item-label,label,[class*='field-label'],[class*='label']",
+      sectionSelector: ".ant-card-head-title,[class*='module-title'],[class*='resume-title'],[class*='section-title'],h2,h3,h4",
+      repeatItemSelector: ".ant-card,[class*='resume-module'],[class*='resume-item'],[class*='list-item']",
+      saveLabels: ["保存", "确定", "下一步", "完成"],
+      editLabels: ["编辑", "修改", "完善"]
+    },
+    {
+      id: "feishu-jobs",
+      name: "飞书招聘",
+      urlPattern: /(?:^|\.)jobs\.feishu\.cn$/i,
+      confidence: 0.82,
+      indicators: [".ud-formily-item", "[class*='applyFormModuleWrapper']", "[data-form-field-id]", "[data-form-field-name]"],
+      containerSelector: ".ud-formily-item,[class*='applyFormModuleWrapper'],[class*='form-item'],[class*='field']",
+      labelSelector: ".ud-formily-item-label-content,label,[class*='label'],[data-form-field-i18n-name]",
+      sectionSelector: ".applyFormModuleWrapper-text,[class*='module-title'],[class*='section-title'],h2,h3,h4",
+      repeatItemSelector: "[class*='applyFormModuleWrapper'],[class*='list-item'],[class*='record-item'],[class*='card-item']",
+      saveLabels: ["保存", "确定", "下一步", "完成"],
+      editLabels: ["编辑", "修改", "完善"]
     },
     {
       id: "ant-design",
@@ -93,6 +161,19 @@
       containerSelector: ".ant-form-item,.ant-row.ant-form-item,[class*='ant-form-item']",
       labelSelector: ".ant-form-item-label,label,.ant-checkbox-wrapper,.ant-radio-wrapper",
       sectionSelector: ".ant-card-head-title,.ant-collapse-header,.ant-tabs-tab,.ant-typography,h2,h3,h4",
+      repeatItemSelector: ".ant-card,.ant-collapse-item,[class*='list-item'],[class*='record-item'],[class*='card-item']",
+      saveLabels: ["保存", "确定", "完成"],
+      editLabels: ["编辑", "修改"]
+    },
+    {
+      id: "arco-design",
+      name: "Arco Design 表单",
+      confidence: 0.77,
+      indicators: [".arco-form-item", ".arco-select-view", ".arco-radio"],
+      containerSelector: ".arco-form-item,[class*='arco-form-item']",
+      labelSelector: ".arco-form-item-label,label,.arco-radio,.arco-checkbox",
+      sectionSelector: ".arco-card-header,[class*='section-title'],[class*='module-title'],h2,h3,h4",
+      repeatItemSelector: ".arco-card,[class*='list-item'],[class*='record-item'],[class*='card-item']",
       saveLabels: ["保存", "确定", "完成"],
       editLabels: ["编辑", "修改"]
     },
@@ -104,6 +185,19 @@
       containerSelector: ".el-form-item,[class*='el-form-item']",
       labelSelector: ".el-form-item__label,label,.el-checkbox,.el-radio",
       sectionSelector: ".el-card__header,.el-collapse-item__header,[class*='title'],h2,h3,h4",
+      repeatItemSelector: ".el-card,.el-collapse-item,[class*='list-item'],[class*='record-item'],[class*='card-item']",
+      saveLabels: ["保存", "确定", "完成"],
+      editLabels: ["编辑", "修改"]
+    },
+    {
+      id: "tdesign",
+      name: "TDesign 表单",
+      confidence: 0.75,
+      indicators: [".t-form__item", ".t-select", ".t-radio"],
+      containerSelector: ".t-form__item,[class*='t-form__item']",
+      labelSelector: ".t-form__label,label,.t-radio,.t-checkbox",
+      sectionSelector: ".t-card__header,[class*='section-title'],[class*='module-title'],h2,h3,h4",
+      repeatItemSelector: ".t-card,[class*='list-item'],[class*='record-item'],[class*='card-item']",
       saveLabels: ["保存", "确定", "完成"],
       editLabels: ["编辑", "修改"]
     }
@@ -177,8 +271,9 @@
     生源地: ["生源户口", "生源所在地", "生源地省", "生源地市"],
     现居住地: ["当前居住地", "居住地", "现居地", "所在地", "现居住城市"],
     现居住城市: ["现居住地", "当前居住城市", "居住城市"],
-    通讯地址: ["通信地址", "联系地址", "当前地址", "详细地址"],
-    联系地址: ["通讯地址", "通信地址", "当前地址", "详细地址"],
+    现居住详细地址: ["当前居住地详细地址", "现居住地址", "居住地址", "现住址", "当前地址"],
+    通讯地址: ["通信地址", "邮寄地址", "收件地址"],
+    联系地址: ["通讯地址", "通信地址", "邮寄地址", "收件地址"],
     邮编: ["邮政编码"],
     邮政编码: ["邮编"],
     现户口所在地: ["当前户口所在地", "户口所在地", "户籍所在地"],
@@ -247,6 +342,7 @@
     是否目标公司实习: ["是否为应聘单位实习", "是否为目标公司实习"],
     部门: ["部门名称", "所在部门"],
     职位名称: ["岗位", "岗位名称", "实习岗位", "职务名称", "角色"],
+    职位: ["职务", "岗位", "职位名称", "家属职务", "亲属职务"],
     工作实习地点: ["工作/实习地点", "工作地点", "实习地点"],
     地点: ["工作地点", "实习地点", "项目地点", "培训地点"],
     工资: ["薪资", "实习工资", "月薪"],
@@ -323,10 +419,12 @@
     联系电话: ["家属联系电话", "亲属联系电话"],
     有无工作经历: ["是否有工作经历", "工作经历"],
     是否退休: ["有无退休", "退休情况"],
+    考核年度: ["绩效年度", "年度考核"],
     绩效考核等级: ["考核等级", "年度绩效考核等级"],
     年度绩效排名: ["绩效排名", "考核排名", "排名"],
     绩效证明人: ["考核证明人", "证明人"],
     绩效证明人联系方式: ["证明人联系方式", "联系方式", "联系电话"],
+    绩效说明: ["考核说明", "绩效评语"],
     兴趣爱好: ["爱好", "特长爱好具体内容"],
     特长: ["个人特长", "技能特长"],
     社会校园活动: ["社会/校园活动", "校园活动", "社会活动"],
@@ -436,6 +534,7 @@
       containerSelector: adapter?.containerSelector || "",
       labelSelector: adapter?.labelSelector || "",
       sectionSelector: adapter?.sectionSelector || "",
+      repeatItemSelector: adapter?.repeatItemSelector || "",
       saveLabels: Array.isArray(adapter?.saveLabels) ? adapter.saveLabels : ["保存"],
       editLabels: Array.isArray(adapter?.editLabels) ? adapter.editLabels : ["编辑", "修改"]
     };
@@ -506,7 +605,7 @@
     if (/整理表单字段|AI 识别表单字段/.test(text)) {
       return { index: 3, total: 6, label: "整理表单字段" };
     }
-    if (/匹配本地资料|AI 识别字段|整理匹配结果|匹配完成/.test(text)) {
+    if (/AI 匹配字段|本地兜底匹配|匹配本地资料|AI 识别字段|整理匹配结果|匹配完成/.test(text)) {
       return { index: 4, total: 6, label: "匹配你的资料" };
     }
     if (/填写匹配项/.test(text)) {
@@ -598,13 +697,13 @@
       ...autofillAiState,
       status: "trying",
       attempted: true,
-      currentPhase: normalizeText(phase || "AI 辅助识别", 60)
+      currentPhase: normalizeText(phase || "AI 优先匹配", 60)
     };
     renderFloatingStatus();
   }
 
   function setAutofillAiUsed(phase) {
-    const phaseText = normalizeText(phase || "AI 辅助识别", 60);
+    const phaseText = normalizeText(phase || "AI 优先匹配", 60);
     autofillAiState = {
       ...autofillAiState,
       status: autofillAiState.fallback ? "partial" : "used",
@@ -617,7 +716,7 @@
   }
 
   function setAutofillAiNoResult(phase, note) {
-    const phaseText = normalizeText(phase || "AI 辅助识别", 60);
+    const phaseText = normalizeText(phase || "AI 优先匹配", 60);
     const notes = appendUniqueText(autofillAiState.notes || [], note || `${phaseText}未返回可用建议`, 160);
     let status = "no-result";
     if (autofillAiState.used && autofillAiState.fallback) {
@@ -638,7 +737,7 @@
   }
 
   function setAutofillAiFallback(phase, error) {
-    const phaseText = normalizeText(phase || "AI 辅助识别", 60);
+    const phaseText = normalizeText(phase || "AI 优先匹配", 60);
     const reason = formatErrorMessage(error);
     const nextReason = normalizeAutofillAiReason({ phase: phaseText, reason });
     const fallbackReasons = (autofillAiState.fallbackReasons || [])
@@ -671,19 +770,19 @@
     const fallbackReasons = formatAutofillAiFallbackReasons(state);
 
     if (status === "trying") {
-      return `正在用 AI 辅助识别字段，只发送字段名称，不发送资料值。`;
+      return `正在用 AI 优先匹配字段，只发送字段名称，不发送资料值。`;
     }
     if (state?.used && state?.fallback) {
-      return `AI 已辅助识别部分字段，其余已使用本地规则继续${fallbackReasons ? `：${fallbackReasons}` : ""}。`;
+      return `AI 已优先匹配部分字段，本地规则已兜底补齐其余字段${fallbackReasons ? `：${fallbackReasons}` : ""}。`;
     }
     if (state?.used) {
-      return `AI 已辅助识别字段${usedPhases ? `（${usedPhases}）` : ""}，具体填写仍在本机完成。`;
+      return `AI 已优先匹配字段${usedPhases ? `（${usedPhases}）` : ""}，资料取值和填写仍在本机完成。`;
     }
     if (state?.fallback) {
-      return `AI 不可用，已使用本地规则继续${fallbackReasons ? `：${fallbackReasons}` : ""}。`;
+      return `AI 不可用，已切换到本地规则兜底${fallbackReasons ? `：${fallbackReasons}` : ""}。`;
     }
     if (status === "no-result" || state?.attempted) {
-      return "AI 没有提供可用建议，本次继续使用本地规则。";
+      return "AI 没有提供可用匹配，本次改用本地规则兜底。";
     }
     return "未调用 AI，本次使用本地规则。";
   }
@@ -692,30 +791,31 @@
     const status = state?.status || "idle";
     const phase = normalizeText(state?.currentPhase || "", 60);
     const stage = normalizeText(progress?.stage || "", 80);
+    const localMatching = /本地兜底匹配|匹配本地资料|整理匹配结果|匹配完成/.test(stage);
 
     if (status === "trying") {
       if (/字段理解/.test(phase)) {
-        return "AI · 正在识别字段";
+        return "AI · 正在优先匹配字段";
       }
-      return "AI · 正在分析页面字段";
+      return "AI · 正在分析页面结构";
     }
     if (state?.used && state?.fallback) {
-      return "AI 辅助部分字段 · 其余本地规则";
+      return localMatching ? "AI 优先匹配 · 本地规则兜底" : "AI 优先匹配 + 本地规则兜底";
     }
     if (state?.fallback) {
-      return "本地规则 · AI 不可用";
+      return localMatching ? "本地规则兜底 · AI 不可用" : "本地规则 · AI 不可用";
     }
-    if (status === "no-result" || state?.attempted) {
-      return "本地规则 · AI 无可用建议";
+    if (status === "no-result" || (state?.attempted && !state?.used && !state?.fallback)) {
+      return localMatching ? "本地规则兜底 · AI 无匹配" : "本地规则 · AI 无可用匹配";
     }
     if (state?.used) {
       if (/填写匹配项/.test(stage)) {
         return "本地填写 · AI 不参与填写";
       }
-      if (/匹配本地资料|整理匹配结果|匹配完成/.test(stage)) {
-        return "AI 已识别字段 · 本地匹配";
+      if (localMatching) {
+        return "AI 优先匹配 · 本地整理结果";
       }
-      return "AI 已识别字段 · 本地继续处理";
+      return "AI 优先匹配 · 本地继续处理";
     }
     if (/读取本机资料|开始填写|扫描页面并准备填写/.test(stage)) {
       return "本地规则 · 正在读取资料";
@@ -726,8 +826,8 @@
     if (/整理表单字段/.test(stage)) {
       return "本地规则 · 正在整理字段";
     }
-    if (/匹配本地资料|整理匹配结果|匹配完成/.test(stage)) {
-      return "本地规则 · 正在匹配资料";
+    if (localMatching) {
+      return "正在用本地规则匹配";
     }
     if (/填写匹配项/.test(stage)) {
       return "本地填写 · 不自动提交";
@@ -738,10 +838,10 @@
   function getAutofillCompletionBadgeText(state = autofillAiState) {
     const status = state?.status || "idle";
     if (state?.used && state?.fallback) {
-      return "AI 辅助部分字段 · 本地完成";
+      return "AI 优先匹配 + 本地规则兜底";
     }
     if (state?.used) {
-      return "AI 辅助识别 · 本地填写";
+      return "AI 优先匹配 · 本地填写";
     }
     if (state?.fallback) {
       return "本地规则完成 · AI 不可用";
@@ -1120,6 +1220,63 @@
     );
   }
 
+  function getClosestDataAttributeValue(element, attributeNames, maxDepth = 6) {
+    let current = element;
+    for (let depth = 0; current && depth <= maxDepth; depth += 1, current = current.parentElement) {
+      if (!(current instanceof Element)) {
+        continue;
+      }
+      for (const name of attributeNames) {
+        const value = current.getAttribute(name);
+        if (value) {
+          const normalized = normalizeText(value, 140);
+          if (normalized) {
+            return normalized;
+          }
+        }
+      }
+    }
+    return "";
+  }
+
+  function getDataAttributeLabelText(element) {
+    return normalizeFieldLabelText(
+      getClosestDataAttributeValue(element, [
+        "data-form-field-i18n-name",
+        "data-form-field-name",
+        "data-field-label",
+        "data-label",
+        "data-title"
+      ])
+    );
+  }
+
+  function getDataAttributeSectionText(element) {
+    const direct = getClosestDataAttributeValue(element, [
+      "data-section-title",
+      "data-module-title",
+      "data-group-title"
+    ], 10);
+    if (direct) {
+      return direct;
+    }
+
+    let current = element.parentElement;
+    for (let depth = 0; current && depth < 10; depth += 1, current = current.parentElement) {
+      if (!(current instanceof Element)) {
+        continue;
+      }
+      const scoped = current.querySelector(
+        ".applyFormModuleWrapper-text,[data-section-title],[data-module-title],[class*='module-title'],[class*='section-title']"
+      );
+      const text = normalizeText(scoped?.textContent || "", 140);
+      if (text) {
+        return text;
+      }
+    }
+    return "";
+  }
+
   function getWrappingLabel(element) {
     const label = element.closest("label");
     return getTextWithoutControls(label);
@@ -1165,7 +1322,9 @@
     parts.push(getLabelByFor(element));
     parts.push(getWrappingLabel(element));
     parts.push(getAriaLabelText(element));
+    parts.push(getDataAttributeLabelText(element));
     parts.push(getAdapterLabelText(element));
+    parts.push(getDataAttributeSectionText(element));
 
     if (container) {
       parts.push(getTextWithoutControls(container));
@@ -1186,6 +1345,14 @@
     parts.push(element.getAttribute("title"));
 
     return normalizeText([...new Set(parts.filter(Boolean))].join(" | "), 420);
+  }
+
+  function getFieldOptionLabelsText(field, maxLength = 180) {
+    const options = Array.isArray(field?.options) ? field.options : [];
+    const labels = options
+      .map((option) => normalizeText(option?.label || option?.value || "", 40))
+      .filter(Boolean);
+    return normalizeText([...new Set(labels)].join(" | "), maxLength);
   }
 
   function normalizeFieldLabelText(value, maxLength = 90) {
@@ -1321,6 +1488,50 @@
 
     const index = controls.findIndex((item) => item === element || item.contains(element) || element.contains(item));
     return { controls, index };
+  }
+
+  function getRepeatGroupLabelText(element) {
+    const root = findRepeatItemRoot(element);
+    if (!root) {
+      return "";
+    }
+
+    const controls = Array.from(root.querySelectorAll(CONTROL_SELECTOR))
+      .filter((item, index, array) => array.indexOf(item) === index)
+      .filter((item) => !item.closest(`#${PANEL_ID}`))
+      .filter(isVisible);
+    const labels = controls
+      .map(getControlContextLabel)
+      .filter((label) => label && !isOptionOnlyLabel(label) && !/OpenJobAutofill/.test(label));
+
+    return normalizeText([...new Set(labels)].join(" | "), 360);
+  }
+
+  function getControlContextLabel(control) {
+    const container = findFieldContainer(control);
+    return normalizeFieldLabelText(
+      extractFieldContainerLabel(container) ||
+        getDataAttributeLabelText(control) ||
+        getAdapterLabelText(control) ||
+        getLabelByFor(control) ||
+        getWrappingLabel(control) ||
+        getAriaLabelText(control) ||
+        ""
+    );
+  }
+
+  function isRepeatItemRootCandidate(root) {
+    if (!root || root.closest?.(`#${PANEL_ID}`)) {
+      return false;
+    }
+
+    const controls = Array.from(root.querySelectorAll?.(CONTROL_SELECTOR) || []).filter(isVisible);
+    if (controls.length < 2 || controls.length > 24) {
+      return false;
+    }
+
+    const text = getTextWithoutControls(root);
+    return Boolean(text && text.length <= 2600);
   }
 
   function getLocationGroupedLabel(context, index) {
@@ -1537,6 +1748,8 @@
       }
     };
 
+    pushText(getDataAttributeSectionText(element));
+
     let current = element.parentElement;
     for (let depth = 0; current && depth < 10; depth += 1, current = current.parentElement) {
       const headingText = getNearestScopedHeadingText(current, headingSelector, element, elementRect);
@@ -1733,10 +1946,17 @@
     const adapter = getActiveSiteAdapter();
     const type = getControlType(element);
     const canFill = !element.disabled && type !== "file";
-    const rawLabel = normalizeText(getLabelByFor(element) || getAdapterLabelText(element) || getWrappingLabel(element) || getAriaLabelText(element));
+    const rawLabel = normalizeText(
+      getLabelByFor(element) ||
+        getDataAttributeLabelText(element) ||
+        getAdapterLabelText(element) ||
+        getWrappingLabel(element) ||
+        getAriaLabelText(element)
+    );
     const nearbyText = getNearbyText(element);
     const label = improveFieldLabel(element, rawLabel, nearbyText);
     const currentValue = getControlCurrentValue(element);
+    const groupText = getRepeatGroupLabelText(element);
 
     return {
       fieldId: getOrCreateFieldId(element),
@@ -1754,6 +1974,7 @@
       canFill,
       section: getSectionText(element),
       nearbyText,
+      groupText,
       options: getOptions(element),
       cssPath: getCssPath(element),
       siteAdapterId: adapter?.id || "",
@@ -2880,15 +3101,19 @@
     if (section.kind === "repeat") {
       const items = Array.isArray(section.items) ? section.items : [];
       items.forEach((item, itemIndex) => {
-        const subsection = normalizeText(item?.title || `${section.title || category} ${itemIndex + 1}`, 120);
+        const baseSubsection = normalizeText(item?.title || `${section.title || category} ${itemIndex + 1}`, 120);
+        const familyRelation = category === "家庭信息" ? getFamilyRelationFromProfileItem(item, baseSubsection) : "";
+        const subsection = buildProfileItemSubsection(baseSubsection, familyRelation);
         appendProfileV2Values(target, item?.values, {
           sectionKey,
           subsection,
+          familyRelation,
           prefix: `profileV2.sections.${sectionKey}.items[${itemIndex}].values`
         });
         appendProfileV2CustomRows(target, item?.custom, {
           sectionKey,
           subsection,
+          familyRelation,
           prefix: `profileV2.sections.${sectionKey}.items[${itemIndex}].custom`
         });
       });
@@ -2898,13 +3123,45 @@
     appendProfileV2Values(target, section.values, {
       sectionKey,
       subsection: "",
+      familyRelation: "",
       prefix: `profileV2.sections.${sectionKey}.values`
     });
     appendProfileV2CustomRows(target, section.custom, {
       sectionKey,
       subsection: "",
+      familyRelation: "",
       prefix: `profileV2.sections.${sectionKey}.custom`
     });
+  }
+
+  function getFamilyRelationFromProfileItem(item, fallbackText = "") {
+    const titleRelation = getFamilyRelationFromText(fallbackText);
+    if (titleRelation) {
+      return titleRelation;
+    }
+
+    const values = item?.values && typeof item.values === "object" ? item.values : {};
+    for (const [label, value] of Object.entries(values)) {
+      if (/关系|与本人关系|亲属关系/.test(normalizeMatchKey(label))) {
+        const relation = getFamilyRelationFromText(value);
+        if (relation) {
+          return relation;
+        }
+      }
+    }
+    return "";
+  }
+
+  function buildProfileItemSubsection(baseSubsection, familyRelation) {
+    const base = normalizeText(baseSubsection, 120);
+    const relation = normalizeText(familyRelation, 40);
+    if (!base) {
+      return relation;
+    }
+    if (!relation || getFamilyRelationFromText(base) === relation) {
+      return base;
+    }
+    return normalizeText(`${base} ${relation}`, 120);
   }
 
   function ensureProfileSection(sections, category, sourceTitle) {
@@ -2940,6 +3197,7 @@
         label,
         value,
         subsection: context.subsection,
+        familyRelation: context.familyRelation,
         itemId: `${context.prefix}[${index}]`
       });
       index += 1;
@@ -2955,6 +3213,7 @@
         label: row?.label || "",
         value: row?.value || "",
         subsection: context.subsection,
+        familyRelation: context.familyRelation,
         itemId: `${context.prefix}[${index}].value`
       });
     });
@@ -2973,6 +3232,7 @@
       preview: formatQuickCopyValue(value, 96),
       hasValue: true,
       subsection: normalizeText(entry.subsection || "", 120),
+      familyRelation: normalizeText(entry.familyRelation || "", 40),
       itemId: entry.itemId || `profileV2.items[${section.items.length}].value`
     };
     item.aliases = buildProfileItemAliases(section, item);
@@ -3018,9 +3278,76 @@
     return normalizeText(field?.label || field?.nearbyText || "", 80);
   }
 
+  function isFamilyRelationLabel(label) {
+    const key = normalizeMatchKey(label);
+    return /^(关系|与本人关系|亲属关系|家庭关系|社会关系)$/.test(key);
+  }
+
+  function isFamilyMemberDetailLabel(label) {
+    const key = normalizeMatchKey(label);
+    return /^(姓名|出生日期|出生年月|生日|性别|政治面貌|学历|工作单位|单位名称|公司|职务|职位|岗位|联系电话|电话|手机号码|是否退休|退休情况|备注|联系地址|通讯地址|地址|住址)$/.test(key);
+  }
+
+  function isFamilyMemberLabel(label) {
+    return isFamilyRelationLabel(label) || isFamilyMemberDetailLabel(label);
+  }
+
+  function getFamilyContextKey(field) {
+    return compactText([
+      field?.groupText,
+      getFieldOptionLabelsText(field, 180),
+      field?.section,
+      field?.nearbyText,
+      field?.label,
+      field?.placeholder
+    ].join(" "));
+  }
+
+  function isLikelyFamilyMemberContext(field, label = "") {
+    const key = getFamilyContextKey(field);
+    const labelKey = normalizeMatchKey(label || field?.label || "");
+    if (!key || /紧急联系人/.test(key)) {
+      return false;
+    }
+
+    if (/是否存在亲属.*(应聘单位|本行|我行)|亲属在.*(应聘单位|本行|我行)|有关声明|电子签名/.test(key)) {
+      return false;
+    }
+
+    if (/家庭情况|家庭信息|家庭及社会关系|社会关系|亲属信息|亲属情况|亲属关系|与本人关系|是否退休/.test(key)) {
+      return true;
+    }
+
+    if (!isFamilyMemberLabel(labelKey)) {
+      return false;
+    }
+
+    const indicators = [
+      /关系|与本人关系|亲属关系/,
+      /姓名/,
+      /出生日期|出生年月/,
+      /政治面貌/,
+      /学历/,
+      /工作单位|单位名称|公司/,
+      /职务|职位|岗位/,
+      /联系电话|手机号码|电话/,
+      /是否退休|退休情况/
+    ];
+    const indicatorCount = indicators.reduce((count, pattern) => count + (pattern.test(key) ? 1 : 0), 0);
+    return /关系|与本人关系|亲属关系/.test(key) && indicatorCount >= 4;
+  }
+
+  function isFamilyScopedField(field, fieldLabel, fieldCategory) {
+    return fieldCategory === "家庭信息" || isLikelyFamilyMemberContext(field, fieldLabel);
+  }
+
   function inferMatchSection(field) {
-    const text = compactText([field?.section, field?.nearbyText, field?.label].join(" "));
     const label = normalizeMatchKey(field?.inferredLabel || field?.label || "");
+    if (isLikelyFamilyMemberContext(field, label)) {
+      return "家庭信息";
+    }
+
+    const text = compactText([field?.groupText, getFieldOptionLabelsText(field, 180), field?.section, field?.nearbyText, field?.label].join(" "));
     if (!text) {
       return "";
     }
@@ -3037,11 +3364,11 @@
     if (/专业技术资格|职业资格|职称/.test(text)) {
       return "专业资格";
     }
-    if (/家庭情况|家庭信息|家庭及社会关系|社会关系|亲属|与本人关系|是否退休/.test(text)) {
-      return "家庭信息";
-    }
     if (/有关声明|声明|永居权|永久居留|背景调查|事实完全相符|非法组织|重大疾病|传染病|行政处罚|失信被执行人|境外居留|第三方企业|任兼职|持有企业股权|用人单位辞退/.test(text)) {
       return "有关声明";
+    }
+    if (/家庭情况|家庭信息|家庭及社会关系|社会关系|亲属信息|亲属情况|亲属关系|与本人关系|是否退休/.test(text)) {
+      return "家庭信息";
     }
     if (/求职意向|意向岗位|预计入职|期望工作城市|期望薪资|当前薪资|当前年收入|面试城市|意向城市|目标岗位|简历来源|目前工作地/.test(text)) {
       return "求职意向";
@@ -3105,10 +3432,11 @@
     const label = normalizeText(item?.label || "", 120);
     const subsection = normalizeText(item?.subsection || "", 120);
     const category = normalizeText(section?.category || "", 120);
+    const labelKey = normalizeMatchKey(label);
 
     if (label) {
       aliases.add(label);
-      aliases.add(normalizeMatchKey(label));
+      aliases.add(labelKey);
     }
     if (subsection) {
       aliases.add(subsection);
@@ -3119,7 +3447,7 @@
       aliases.add(normalizeMatchKey(category));
     }
 
-    const aliasList = PROFILE_LABEL_ALIASES[label] || PROFILE_LABEL_ALIASES[normalizeMatchKey(label)] || [];
+    const aliasList = PROFILE_LABEL_ALIASES[label] || PROFILE_LABEL_ALIASES[labelKey] || [];
     for (const alias of aliasList) {
       aliases.add(alias);
       aliases.add(normalizeMatchKey(alias));
@@ -3130,17 +3458,21 @@
 
   function buildProfileCatalogFromEntries(entries) {
     const sectionMap = new Map();
-    const fields = entries
-      .filter((entry) => entry?.itemId && entry?.label)
-      .map((entry) => ({
+    const fields = [];
+
+    for (const entry of entries) {
+      if (!entry?.itemId || !entry?.label) {
+        continue;
+      }
+
+      const field = {
         path: entry.itemId,
         label: [entry.category, entry.subsection, entry.label].filter(Boolean).join(" / "),
         aliases: Array.from(new Set([entry.label, entry.subsection, entry.category, ...(entry.aliases || [])].filter(Boolean)))
-      }));
+      };
+      fields.push(field);
 
-    for (const field of fields) {
-      const entry = entries.find((item) => item.itemId === field.path);
-      const key = entry?.category || "本地资料";
+      const key = entry.category || "本地资料";
       if (!sectionMap.has(key)) {
         sectionMap.set(key, {
           key,
@@ -3242,6 +3574,175 @@
     return (compatiblePairs.get(fieldCategory) || []).includes(entryCategory);
   }
 
+  function isNameLikeLabel(labelKey) {
+    return /姓名|联系人|证明人|推荐人|介绍人/.test(labelKey);
+  }
+
+  function isPhoneLikeLabel(labelKey) {
+    return /电话|手机|联系方式|联系电话|手机号/.test(labelKey);
+  }
+
+  function isRoleLikeLabel(labelKey) {
+    return /职务|职位|岗位|角色/.test(labelKey);
+  }
+
+  function isRelationLikeLabel(labelKey) {
+    return /关系|与本人关系|亲属关系/.test(labelKey);
+  }
+
+  function hasRelationLikeOptions(optionText) {
+    return /父亲|母亲|爸爸|妈妈|配偶|爱人|丈夫|妻子|兄弟|姐妹|哥哥|姐姐|弟弟|妹妹|儿子|女儿|朋友|同学|同事|亲属|关系/.test(optionText);
+  }
+
+  function getContextualAddressBucket(key, labelKey) {
+    const provinceLike = /省|省份/.test(labelKey);
+    const cityLike = /市|城市|地区/.test(labelKey);
+    const addressLike = /地址|住址|详细地址|街道|门牌|通讯|通信|邮寄|收件/.test(labelKey);
+
+    if (/籍贯/.test(key)) {
+      if (provinceLike || /籍贯省/.test(key)) {
+        return "nativeProvince";
+      }
+      if (cityLike || /籍贯市/.test(key)) {
+        return "nativeCity";
+      }
+      return "nativePlace";
+    }
+
+    if (/生源地|生源户口|生源所在地/.test(key)) {
+      if (provinceLike || /生源地省/.test(key)) {
+        return "sourceProvince";
+      }
+      if (cityLike || /生源地市/.test(key)) {
+        return "sourceCity";
+      }
+      return "sourcePlace";
+    }
+
+    if (/户口|户籍/.test(key)) {
+      if (provinceLike || /户口所在地省|户籍所在地省/.test(key)) {
+        return "hukouProvince";
+      }
+      if (cityLike || /户口所在地市|户籍所在地市/.test(key)) {
+        return "hukouCity";
+      }
+      return "hukouPlace";
+    }
+
+    if (/通讯地址|通信地址|联系地址|邮寄地址|收件地址/.test(key)) {
+      return "mailingAddress";
+    }
+
+    if (/当前居住|现居住|现居地|居住城市|居住地|现住址/.test(key)) {
+      if (addressLike || /详细地址|地址|住址|街道|门牌/.test(key)) {
+        return "currentResidenceAddress";
+      }
+      return "currentResidenceCity";
+    }
+
+    return "";
+  }
+
+  function getContextualSemanticBucket(field, fieldLabel, fieldCategory) {
+    const labelKey = normalizeMatchKey(fieldLabel || field?.label || "");
+    const optionText = getFieldOptionLabelsText(field, 200);
+    const key = compactText([
+      fieldCategory,
+      field?.groupText,
+      field?.section,
+      field?.nearbyText,
+      field?.label,
+      field?.placeholder,
+      field?.name,
+      field?.id,
+      optionText
+    ].join(" "));
+
+    if (!key) {
+      return "";
+    }
+
+    if (
+      /家庭信息|家庭情况|家庭及社会关系|社会关系|亲属信息|亲属情况|亲属关系/.test(key) &&
+      !/是否存在亲属.*(应聘单位|本行|我行)|亲属在.*(应聘单位|本行|我行)|有关声明|电子签名/.test(key)
+    ) {
+      if (isRelationLikeLabel(labelKey) || hasRelationLikeOptions(optionText)) {
+        return "familyRelation";
+      }
+      if (/姓名/.test(labelKey)) {
+        return "familyName";
+      }
+      if (/出生日期|出生年月|生日/.test(labelKey)) {
+        return "familyBirthDate";
+      }
+      if (/政治面貌/.test(labelKey)) {
+        return "familyPoliticalStatus";
+      }
+      if (/学历/.test(labelKey)) {
+        return "familyEducationLevel";
+      }
+      if (/工作单位|单位名称|公司/.test(labelKey)) {
+        return "familyEmployer";
+      }
+      if (isRoleLikeLabel(labelKey)) {
+        return "familyRole";
+      }
+      if (isPhoneLikeLabel(labelKey)) {
+        return "familyPhone";
+      }
+      if (/联系地址|通讯地址|地址|住址/.test(labelKey)) {
+        return "familyAddress";
+      }
+      if (/是否退休|退休情况/.test(labelKey)) {
+        return "familyRetired";
+      }
+    }
+
+    if (/绩效考核|考核年度|考核等级/.test(key)) {
+      if (isPhoneLikeLabel(labelKey)) {
+        return "performanceContact";
+      }
+      if (isNameLikeLabel(labelKey)) {
+        return "performanceReference";
+      }
+      if (/排名/.test(labelKey) || /排名/.test(key)) {
+        return "performanceRank";
+      }
+      if (/绩效考核等级|考核等级/.test(labelKey) || /绩效考核等级|考核等级/.test(key)) {
+        return "performanceLevel";
+      }
+      if (/说明|评语|备注/.test(labelKey) || /说明|评语|备注/.test(key)) {
+        return "performanceNote";
+      }
+    }
+
+    if (/紧急联系人|紧急联系方式/.test(key)) {
+      if (isRelationLikeLabel(labelKey) || hasRelationLikeOptions(optionText)) {
+        return "emergencyRelation";
+      }
+      if (isPhoneLikeLabel(labelKey)) {
+        return "emergencyPhone";
+      }
+      if (isNameLikeLabel(labelKey) || /紧急联系人/.test(labelKey)) {
+        return "emergencyContact";
+      }
+    }
+
+    if (/证明人|推荐人|介绍人/.test(key) && !/紧急联系人/.test(key)) {
+      if (isPhoneLikeLabel(labelKey)) {
+        return "referencePhone";
+      }
+      if (isRoleLikeLabel(labelKey)) {
+        return "referenceRole";
+      }
+      if (isNameLikeLabel(labelKey)) {
+        return "referenceName";
+      }
+    }
+
+    return getContextualAddressBucket(key, labelKey);
+  }
+
   function getSemanticBucket(text, category = "") {
     const key = normalizeMatchKey([category, text].join(" "));
     if (!key) {
@@ -3251,6 +3752,43 @@
     if (/是否存在亲属.*(应聘单位|本行|我行)|亲属在.*(应聘单位|本行|我行)/.test(key)) {
       return "declarationRelativeAtEmployer";
     }
+
+    if (/家庭信息|家庭情况|家庭及社会关系|社会关系|亲属信息|亲属情况|亲属关系/.test(key)) {
+      if (/与本人关系|亲属关系|^家庭信息关系$|关系/.test(key)) {
+        return "familyRelation";
+      }
+      if (/姓名/.test(key)) {
+        return "familyName";
+      }
+      if (/出生日期|出生年月|生日/.test(key)) {
+        return "familyBirthDate";
+      }
+      if (/政治面貌/.test(key)) {
+        return "familyPoliticalStatus";
+      }
+      if (/学历/.test(key)) {
+        return "familyEducationLevel";
+      }
+      if (/工作单位|单位名称|公司/.test(key)) {
+        return "familyEmployer";
+      }
+      if (/职务|职位|岗位/.test(key)) {
+        return "familyRole";
+      }
+      if (/联系电话|手机号码|电话/.test(key)) {
+        return "familyPhone";
+      }
+      if (/联系地址|通讯地址|地址|住址/.test(key)) {
+        return "familyAddress";
+      }
+      if (/是否退休|退休情况/.test(key)) {
+        return "familyRetired";
+      }
+      if (/备注/.test(key)) {
+        return "familyNote";
+      }
+    }
+
     if (/是否患有|传染病|高血压|心脏病|糖尿病|肾炎|精神病|影响工作的疾病|重大疾病/.test(key)) {
       return "declarationDisease";
     }
@@ -3305,6 +3843,9 @@
       }
       if (/绩效考核等级|考核等级/.test(key)) {
         return "performanceLevel";
+      }
+      if (/说明|评语|备注/.test(key)) {
+        return "performanceNote";
       }
     }
     if (/专业技术资格|职业资格|职称/.test(key)) {
@@ -3423,6 +3964,15 @@
     }
     if (/面试城市|可面试城市/.test(key)) {
       return "interviewCity";
+    }
+    if (/当前居住地详细地址|现居住详细地址|现居住地址|居住地址|现住址|当前地址/.test(key)) {
+      return "currentResidenceAddress";
+    }
+    if (/当前居住地|现居住地|现居住城市|居住城市|现居地/.test(key)) {
+      return "currentResidenceCity";
+    }
+    if (/通讯地址|通信地址|联系地址|邮寄地址|收件地址/.test(key)) {
+      return "mailingAddress";
     }
     if (/出生日期|出生年月|生日/.test(key)) {
       return "birthDate";
@@ -3729,6 +4279,11 @@
   }
 
   function getFieldSemanticBucket(field, fieldLabel, fieldCategory) {
+    const contextualBucket = getContextualSemanticBucket(field, fieldLabel, fieldCategory);
+    if (contextualBucket) {
+      return contextualBucket;
+    }
+
     return getFirstSemanticBucket(
       [
         fieldLabel,
@@ -3736,7 +4291,9 @@
         field?.placeholder,
         field?.name,
         field?.id,
-        field?.nearbyText
+        field?.nearbyText,
+        field?.groupText,
+        getFieldOptionLabelsText(field, 180)
       ],
       fieldCategory
     );
@@ -3751,6 +4308,104 @@
       ],
       entry?.category
     );
+  }
+
+  function canProjectEntryValueToFieldBucket(fieldBucket, entryBucket) {
+    const projectionMap = {
+      nativeProvince: ["nativePlace"],
+      nativeCity: ["nativePlace"],
+      sourceProvince: ["sourcePlace"],
+      sourceCity: ["sourcePlace"],
+      hukouProvince: ["hukouPlace"],
+      hukouCity: ["hukouPlace"],
+      workProvince: ["workPlace"],
+      workCity: ["workPlace"],
+      examProvince: ["examPlace"],
+      examCity: ["examPlace"],
+      currentResidenceCity: ["currentResidenceAddress"]
+    };
+    return (projectionMap[fieldBucket] || []).includes(entryBucket);
+  }
+
+  function splitAdministrativeLocation(value) {
+    const text = normalizeText(value, 160).replace(/\s+/g, "");
+    if (!text) {
+      return [];
+    }
+
+    const parts =
+      text.match(
+        /(?:香港特别行政区|澳门特别行政区|北京市|上海市|天津市|重庆市|[^省]+省|[^自治区]+自治区|[^特别行政区]+特别行政区|[^市]+市|[^区县旗州盟]+(?:区|县|旗|州|盟))/g
+      ) || [];
+
+    return parts.map((part) => normalizeText(part, 40)).filter(Boolean);
+  }
+
+  function isMunicipalityLike(value) {
+    return /^(北京市|上海市|天津市|重庆市|香港特别行政区|澳门特别行政区)$/.test(normalizeText(value, 40));
+  }
+
+  function getProvinceLevelLocationPart(parts) {
+    const first = normalizeText(parts?.[0] || "", 40);
+    if (!first) {
+      return "";
+    }
+    return /省|自治区|特别行政区|市$/.test(first) ? first : "";
+  }
+
+  function getCityLevelLocationPart(parts) {
+    const first = normalizeText(parts?.[0] || "", 40);
+    const second = normalizeText(parts?.[1] || "", 40);
+    if (!first) {
+      return "";
+    }
+    if (isMunicipalityLike(first)) {
+      return first;
+    }
+    if (/省|自治区|特别行政区/.test(first)) {
+      return second || first;
+    }
+    if (/市$/.test(first)) {
+      return first;
+    }
+    return second || first;
+  }
+
+  function projectAdministrativeLocationValue(value, fieldBucket) {
+    const parts = splitAdministrativeLocation(value);
+    if (parts.length === 0) {
+      return "";
+    }
+
+    if (/Province$/.test(fieldBucket)) {
+      return getProvinceLevelLocationPart(parts);
+    }
+    if (/City$/.test(fieldBucket) || fieldBucket === "currentResidenceCity") {
+      return getCityLevelLocationPart(parts) || getProvinceLevelLocationPart(parts);
+    }
+    return "";
+  }
+
+  function areSemanticBucketsCompatible(fieldBucket, entryBucket) {
+    if (!fieldBucket || !entryBucket) {
+      return true;
+    }
+    return fieldBucket === entryBucket || canProjectEntryValueToFieldBucket(fieldBucket, entryBucket);
+  }
+
+  function resolveEntryValueForField(field, entry, fieldLabel, fieldCategory) {
+    const rawValue = entry?.value == null ? "" : String(entry.value).trim();
+    if (!rawValue) {
+      return "";
+    }
+
+    const fieldBucket = getFieldSemanticBucket(field, fieldLabel, fieldCategory);
+    const entryBucket = getEntrySemanticBucket(entry);
+    if (fieldBucket === entryBucket || !canProjectEntryValueToFieldBucket(fieldBucket, entryBucket)) {
+      return rawValue;
+    }
+
+    return projectAdministrativeLocationValue(rawValue, fieldBucket);
   }
 
   function getFamilyRelationFromText(value) {
@@ -3780,6 +4435,7 @@
     const textRelation = getFamilyRelationFromText([
       field?.nearbyText,
       field?.section,
+      field?.groupText,
       field?.label,
       field?.placeholder
     ].join(" "));
@@ -3794,6 +4450,7 @@
 
   function getEntryFamilyRelation(entry) {
     return getFamilyRelationFromText([
+      entry?.familyRelation,
       entry?.subsection,
       entry?.label,
       entry?.value,
@@ -3801,19 +4458,46 @@
     ].join(" "));
   }
 
-  function getFamilyRelationMatchBonus(field, entry, fieldCategory) {
+  function requiresFamilyRelationGate(fieldLabel) {
+    return isFamilyMemberDetailLabel(fieldLabel) && !isFamilyRelationLabel(fieldLabel);
+  }
+
+  function isFamilyCandidateAllowed(field, entry, fieldLabel, fieldCategory) {
+    if (!isFamilyScopedField(field, fieldLabel, fieldCategory)) {
+      return true;
+    }
+
     if (entry?.category !== "家庭信息") {
+      return false;
+    }
+
+    if (!requiresFamilyRelationGate(fieldLabel)) {
+      return true;
+    }
+
+    const fieldRelation = getFieldFamilyRelation(field);
+    const entryRelation = getEntryFamilyRelation(entry);
+    return Boolean(fieldRelation && entryRelation && fieldRelation === entryRelation);
+  }
+
+  function getFamilyRelationMatchBonus(field, entry, fieldCategory) {
+    const fieldLabel = field?.inferredLabel || inferFieldLabel(field);
+    if (!isFamilyScopedField(field, fieldLabel, fieldCategory)) {
+      return 0;
+    }
+
+    if (entry?.category !== "家庭信息") {
+      return -999;
+    }
+
+    if (!requiresFamilyRelationGate(fieldLabel)) {
       return 0;
     }
 
     const fieldRelation = getFieldFamilyRelation(field);
-    if (fieldCategory && fieldCategory !== "家庭信息" && !fieldRelation) {
-      return 0;
-    }
-
     const entryRelation = getEntryFamilyRelation(entry);
     if (!fieldRelation || !entryRelation) {
-      return 0;
+      return -999;
     }
     return fieldRelation === entryRelation ? 18 : -999;
   }
@@ -3862,6 +4546,14 @@
       return null;
     }
 
+    const { repeatItemSelector } = getAdapterSelectors();
+    if (repeatItemSelector) {
+      const adapterRoot = element.closest(repeatItemSelector);
+      if (isRepeatItemRootCandidate(adapterRoot)) {
+        return adapterRoot;
+      }
+    }
+
     let current = element.parentElement;
     let best = null;
     for (let depth = 0; current && depth < 8; depth += 1, current = current.parentElement) {
@@ -3869,12 +4561,11 @@
         break;
       }
 
-      const controls = Array.from(current.querySelectorAll?.(CONTROL_SELECTOR) || []).filter(isVisible);
       const text = getTextWithoutControls(current);
-      if (controls.length >= 3 && controls.length <= 24 && text.length <= 2400) {
+      if (isRepeatItemRootCandidate(current)) {
         best = current;
       }
-      if (/家庭|社会关系|亲属/.test(text) && controls.length >= 3 && controls.length <= 24) {
+      if (/家庭|社会关系|亲属/.test(text) && isRepeatItemRootCandidate(current)) {
         return current;
       }
     }
@@ -3886,7 +4577,7 @@
     const fieldBucket = getFieldSemanticBucket(field, fieldLabel, fieldCategory);
     const entryBucket = getEntrySemanticBucket(entry);
 
-    if (!fieldBucket || !entryBucket || fieldBucket === entryBucket) {
+    if (areSemanticBucketsCompatible(fieldBucket, entryBucket)) {
       return false;
     }
 
@@ -3944,12 +4635,44 @@
     return Array.from(labels).filter(Boolean);
   }
 
+  function shouldUseRepeatGroupContext(field, fieldLabel, fieldCategory) {
+    if (!field?.groupText) {
+      return false;
+    }
+
+    const labelKey = normalizeMatchKey(fieldLabel || field?.label || "");
+    if (!labelKey || isGenericFieldLabel(fieldLabel) || isOptionOnlyLabel(fieldLabel)) {
+      return true;
+    }
+
+    if (["家庭信息", "绩效考核", "教育经历", "实习经历", "工作经历", "项目经历"].includes(fieldCategory)) {
+      return true;
+    }
+
+    return /^(姓名|电话|手机号|联系方式|工作单位|单位名称|公司|职务|职位|岗位|地址|住址|联系地址|通讯地址|关系|联系人|证明人|推荐人|学校|专业|学历|学位|部门|地点|城市|开始时间|结束时间)$/.test(labelKey);
+  }
+
   function scoreAutofillCandidate(field, entry, fieldLabel, fieldCategory) {
     if (!field || !entry) {
       return 0;
     }
 
-    const fieldText = compactText([fieldLabel, field.nearbyText, field.placeholder, field.name, field.id].join(" "));
+    const familyScoped = isFamilyScopedField(field, fieldLabel, fieldCategory);
+    if (familyScoped && entry.category !== "家庭信息") {
+      return 0;
+    }
+
+    const optionText = getFieldOptionLabelsText(field, 180);
+    const useGroupContext = shouldUseRepeatGroupContext(field, fieldLabel, fieldCategory);
+    const fieldText = compactText([
+      fieldLabel,
+      field.nearbyText,
+      field.placeholder,
+      field.name,
+      field.id,
+      optionText,
+      familyScoped || useGroupContext ? field.groupText : ""
+    ].join(" "));
     const entryText = compactText([entry.label, entry.subsection, entry.category, ...(entry.aliases || [])].join(" "));
     if (!fieldText || !entryText) {
       return 0;
@@ -3964,6 +4687,10 @@
     }
 
     if (isSemanticallyIncompatible(field, entry, fieldLabel, fieldCategory)) {
+      return 0;
+    }
+
+    if (!isFamilyCandidateAllowed(field, entry, fieldLabel, fieldCategory)) {
       return 0;
     }
 
@@ -4041,7 +4768,8 @@
 
   function guessAutofillValueFieldType(field) {
     const labelText = compactText([field?.inferredLabel || inferFieldLabel(field), field?.label, field?.placeholder].join(" "));
-    const contextText = compactText([field?.nearbyText, field?.section].join(" "));
+    const optionText = getFieldOptionLabelsText(field, 160);
+    const contextText = compactText([field?.nearbyText, field?.section, field?.groupText, optionText].join(" "));
     if (/开始时间|结束时间|出生日期|出生年月|取得毕业证时间|获取日期|取得时间|竞赛时间|获得时间|有效期/.test(labelText)) {
       return "date";
     }
@@ -4049,6 +4777,9 @@
       return "choice";
     }
     if (/性别/.test(labelText)) {
+      return "choice";
+    }
+    if (/男|女|是|否|有|无|未婚|已婚|离婚|丧偶|本科|硕士|博士|父亲|母亲|配偶|党员|团员|群众/.test(optionText)) {
       return "choice";
     }
     if (
@@ -4100,14 +4831,21 @@
     return type || "text";
   }
 
+  function getAutoFillScoreThreshold(field, fieldLabel, fieldCategory) {
+    if (isFamilyScopedField(field, fieldLabel, fieldCategory) && requiresFamilyRelationGate(fieldLabel)) {
+      return field.hasCurrentValue ? 90 : 62;
+    }
+    return field.hasCurrentValue ? 84 : 55;
+  }
+
   function createAutofillCandidate(field, entry, score) {
     const fieldLabel = field?.inferredLabel || inferFieldLabel(field);
     const fieldCategory = field?.inferredCategory || inferMatchSection(field);
-    const value = entry?.value == null ? "" : String(entry.value).trim();
+    const value = resolveEntryValueForField(field, entry, fieldLabel, fieldCategory);
     const confidence = score >= 40 ? Math.max(0, Math.min(0.99, 0.45 + score / 100)) : Math.max(0, score / 120);
     const text = compactText([fieldLabel, fieldCategory, field.nearbyText, field.placeholder, field.name, field.id].join(" "));
     const writeMode = guessAutofillValueFieldType(field);
-    const autoFillScoreThreshold = field.hasCurrentValue ? 84 : 55;
+    const autoFillScoreThreshold = getAutoFillScoreThreshold(field, fieldLabel, fieldCategory);
     const alreadyMatches = valuesLookEquivalent(field.currentValue, value);
     const shouldAutoFill =
       (alreadyMatches || score >= autoFillScoreThreshold) &&
@@ -4154,13 +4892,19 @@
     if (isSemanticallyIncompatible(field, entry, fieldLabel, fieldCategory)) {
       return null;
     }
+    if (!isFamilyCandidateAllowed(field, entry, fieldLabel, fieldCategory)) {
+      return null;
+    }
 
     const confidence = Math.max(0, Math.min(1, Number(mapping.confidence || 0)));
     const score = Math.round(confidence * 100);
     const candidate = createAutofillCandidate(field, entry, Math.max(score, 35));
+    if (!candidate.value) {
+      return null;
+    }
     candidate.confidence = confidence;
     candidate.score = score;
-    candidate.mappingSource = "AI 辅助识别";
+    candidate.mappingSource = "AI 优先匹配";
     candidate.reason = normalizeText(mapping.reason || "", 160);
     candidate.shouldAutoFill = (candidate.alreadyMatches || confidence >= (field.hasCurrentValue ? 0.86 : 0.68)) && Boolean(candidate.value) && field.canFill;
     candidate.canAutoFill = (candidate.alreadyMatches || confidence >= 0.42) && Boolean(candidate.value) && field.canFill;
@@ -4265,7 +5009,8 @@
       hasCurrentValue: Boolean(field?.hasCurrentValue),
       required: Boolean(field?.required),
       placeholder: normalizeText(field?.placeholder || "", 80),
-      section: normalizeText(field?.section || "", 120)
+      section: normalizeText(field?.section || "", 120),
+      groupText: normalizeText(field?.groupText || "", 160)
     };
   }
 
@@ -4371,6 +5116,20 @@
     lastAutofillDebug.finishedAt = new Date().toISOString();
   }
 
+  function getAutofillCandidateSectionRank(category) {
+    const index = AUTO_FILL_SECTION_ORDER.indexOf(category);
+    return index === -1 ? 999 : index;
+  }
+
+  function compareAutofillCandidates(leftCandidate, rightCandidate) {
+    const leftRank = getAutofillCandidateSectionRank(leftCandidate.fieldCategory);
+    const rightRank = getAutofillCandidateSectionRank(rightCandidate.fieldCategory);
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    return Number(rightCandidate.score || 0) - Number(leftCandidate.score || 0);
+  }
+
   function buildAutofillPlan(scan) {
     const entries = getCurrentProfileEntries();
     const visibleFields = Array.isArray(scan?.fields) ? scan.fields.filter((field) => field && field.canFill) : [];
@@ -4423,16 +5182,7 @@
       candidates.push(candidate);
     }
 
-    candidates.sort((a, b) => {
-      const left = AUTO_FILL_SECTION_ORDER.indexOf(a.fieldCategory);
-      const right = AUTO_FILL_SECTION_ORDER.indexOf(b.fieldCategory);
-      const leftRank = left === -1 ? 999 : left;
-      const rightRank = right === -1 ? 999 : right;
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank;
-      }
-      return b.score - a.score;
-    });
+    candidates.sort(compareAutofillCandidates);
 
     return {
       createdAt: new Date().toISOString(),
@@ -4450,51 +5200,101 @@
   }
 
   function sortAutofillCandidates(candidates) {
-    return candidates.slice().sort((a, b) => {
-      const left = AUTO_FILL_SECTION_ORDER.indexOf(a.fieldCategory);
-      const right = AUTO_FILL_SECTION_ORDER.indexOf(b.fieldCategory);
-      const leftRank = left === -1 ? 999 : left;
-      const rightRank = right === -1 ? 999 : right;
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank;
-      }
-      return b.score - a.score;
-    });
+    return candidates.slice().sort(compareAutofillCandidates);
   }
 
-  function mergeAiCandidatesIntoPlan(plan, aiCandidates, notes = []) {
-    if (!plan || !Array.isArray(aiCandidates) || aiCandidates.length === 0) {
-      return plan;
-    }
-
-    const byFieldId = new Map((plan.candidates || []).map((candidate) => [candidate.fieldId, candidate]));
-    for (const candidate of aiCandidates) {
-      const existing = byFieldId.get(candidate.fieldId);
-      if (!existing || candidate.confidence >= existing.confidence || existing.score < 70) {
-        byFieldId.set(candidate.fieldId, candidate);
-      }
-    }
-
-    const candidates = sortAutofillCandidates(Array.from(byFieldId.values()));
+  function cloneLocalFallbackCandidate(candidate) {
     return {
-      ...plan,
-      mappingSource: "AI + 本地规则",
+      ...candidate,
+      mappingSource: "本地规则兜底"
+    };
+  }
+
+  function shouldFallbackToLocalCandidate(aiCandidate, localCandidate) {
+    if (!aiCandidate || !localCandidate) {
+      return false;
+    }
+    if (aiCandidate.shouldAutoFill) {
+      return false;
+    }
+    if (aiCandidate.confidence >= 0.58) {
+      return false;
+    }
+    if (localCandidate.shouldAutoFill && localCandidate.score >= 55) {
+      return true;
+    }
+    if (!aiCandidate.canAutoFill && localCandidate.canAutoFill && localCandidate.score >= 45) {
+      return true;
+    }
+    return false;
+  }
+
+  function buildAiFirstPlan(localPlan, aiCandidates, notes = []) {
+    if (!localPlan || !Array.isArray(aiCandidates) || aiCandidates.length === 0) {
+      return localPlan;
+    }
+
+    const selectedByFieldId = new Map();
+    const localByFieldId = new Map((localPlan.candidates || []).map((candidate) => [candidate.fieldId, candidate]));
+    let aiPrimaryCount = 0;
+    let localFallbackCount = 0;
+
+    for (const aiCandidate of aiCandidates) {
+      const localCandidate = localByFieldId.get(aiCandidate.fieldId);
+      if (shouldFallbackToLocalCandidate(aiCandidate, localCandidate)) {
+        selectedByFieldId.set(aiCandidate.fieldId, cloneLocalFallbackCandidate(localCandidate));
+        localFallbackCount += 1;
+        continue;
+      }
+      selectedByFieldId.set(aiCandidate.fieldId, aiCandidate);
+      aiPrimaryCount += 1;
+    }
+
+    for (const localCandidate of localPlan.candidates || []) {
+      if (selectedByFieldId.has(localCandidate.fieldId)) {
+        continue;
+      }
+      selectedByFieldId.set(localCandidate.fieldId, cloneLocalFallbackCandidate(localCandidate));
+      localFallbackCount += 1;
+    }
+
+    const candidates = sortAutofillCandidates(Array.from(selectedByFieldId.values()));
+    return {
+      ...localPlan,
+      mappingSource: localFallbackCount > 0 ? "AI 优先 + 本地规则兜底" : "AI 优先匹配",
       aiNotes: notes,
+      aiPrimaryCount,
+      localFallbackCount,
       candidates,
       autoFillIds: new Set(candidates.filter((candidate) => candidate.shouldAutoFill).map((candidate) => candidate.id))
     };
   }
 
-  async function enhancePlanWithAi(scan, plan) {
-    const entries = Array.isArray(plan?.entries) ? plan.entries : getCurrentProfileEntries();
+  function buildPlanMatchSummary(plan) {
+    const aiPrimaryCount = Number(plan?.aiPrimaryCount || 0);
+    const localFallbackCount = Number(plan?.localFallbackCount || 0);
+    if (plan?.mappingSource === "AI 优先 + 本地规则兜底") {
+      return `AI 优先匹配 ${aiPrimaryCount} 项，本地规则兜底 ${localFallbackCount} 项`;
+    }
+    if (plan?.mappingSource === "AI 优先匹配") {
+      return `AI 优先匹配 ${aiPrimaryCount} 项`;
+    }
+    if (plan?.mappingSource === "AI 表单字段识别 + 本地规则") {
+      return "AI 已识别表单结构，本地规则完成字段匹配";
+    }
+    return "本地规则完成字段匹配";
+  }
+
+  async function enhancePlanWithAi(scan, localPlan) {
+    const entries = Array.isArray(localPlan?.entries) ? localPlan.entries : getCurrentProfileEntries();
     const profileCatalog = buildProfileCatalogFromEntries(entries);
     if (profileCatalog.fields.length === 0) {
-      return { plan };
+      return { plan: localPlan };
     }
 
     setAutofillAiTrying("字段理解");
-    setAutofillProgress("AI 识别字段", 76, "正在匹配页面字段和本机资料项");
-    setProfilePanelStatus("正在用 AI 辅助识别字段。只发送字段名称，不发送资料值...");
+    setAutofillProgress("AI 匹配字段", 76, "正在用 AI 优先匹配页面字段，本地规则会兜底剩余字段");
+    setProfilePanelStatus("正在用 AI 优先匹配页面字段，只发送字段名称，不发送资料值...");
     const response = await sendRuntimeMessage({
       type: "OJAF_MAP_FIELDS",
       payload: {
@@ -4507,9 +5307,17 @@
     const aiCandidates = mappings
       .map((mapping) => createAiAutofillCandidate(mapping, scan, entries))
       .filter(Boolean);
-    const enhancedPlan = mergeAiCandidatesIntoPlan(plan, aiCandidates, response?.notes || []);
+    if (aiCandidates.length === 0) {
+      setAutofillAiNoResult("字段理解", "AI 未返回可用字段匹配");
+      setAutofillProgress("本地兜底匹配", 82, "AI 未返回可用匹配，正在切换本地规则兜底");
+      return {
+        plan: localPlan
+      };
+    }
+
+    const enhancedPlan = buildAiFirstPlan(localPlan, aiCandidates, response?.notes || []);
     setAutofillAiUsed("字段理解");
-    setAutofillProgress("AI 识别字段", 86, `已整理 ${aiCandidates.length} 项建议`);
+    setAutofillProgress("AI 匹配字段", 86, buildPlanMatchSummary(enhancedPlan));
 
     return {
       plan: enhancedPlan
@@ -4520,7 +5328,7 @@
     try {
       setAutofillAiTrying("表单字段识别");
       setAutofillProgress("AI 识别表单字段", 50, "正在识别字段名称和控件类型");
-      setProfilePanelStatus("正在用 AI 辅助识别表单字段，只发送字段信息...");
+      setProfilePanelStatus("正在用 AI 识别表单结构，只发送字段信息...");
       const response = await sendRuntimeMessage({
         type: "OJAF_ANALYZE_PAGE_STRUCTURE",
         payload: {
@@ -4531,7 +5339,7 @@
       const hints = Array.isArray(response?.fieldHints) ? response.fieldHints : [];
       if (hints.length === 0) {
         setAutofillAiNoResult("表单字段识别", "AI 未返回可用字段建议");
-        setAutofillProgress("整理表单字段", 60, "AI 没有提供可用建议，继续使用本地规则");
+        setAutofillProgress("整理表单字段", 60, "AI 没有提供可用建议，继续使用本地规则兜底");
         return { scan };
       }
 
@@ -4603,15 +5411,15 @@
       setAutofillProgress("整理表单字段", 42, `本地已发现 ${baseScan.fields.length} 个可见字段`);
       const aiStructure = await enhanceScanWithAi(baseScan);
       const scan = aiStructure.scan || baseScan;
-      setAutofillProgress("匹配本地资料", 64, `本地规则正在匹配 ${scan.fields.length} 个字段`);
-      let plan = buildAutofillPlan(scan);
+      const localPlan = buildAutofillPlan(scan);
+      let plan = localPlan;
 
       try {
-        const aiResult = await enhancePlanWithAi(scan, plan);
+        const aiResult = await enhancePlanWithAi(scan, localPlan);
         plan = aiResult.plan || plan;
       } catch (error) {
         setAutofillAiFallback("字段理解", error);
-        setAutofillProgress("匹配本地资料", 84, "AI 不可用，已使用本地规则整理匹配结果");
+        setAutofillProgress("本地兜底匹配", 84, `AI 不可用，正在用本地规则兜底 ${scan.fields.length} 个字段`);
       }
 
       if (plan.mappingSource === "本地规则" && (autofillAiState.usedPhases || []).includes("表单字段识别")) {
@@ -4623,16 +5431,16 @@
 
       const aiUsage = getAutofillAiSnapshot();
       const aiStatus = aiUsage.message;
-      setAutofillProgress("整理匹配结果", 90, `本地整理完成，已匹配 ${plan.candidates.length} 项`);
+      setAutofillProgress("整理匹配结果", 90, `${buildPlanMatchSummary(plan)}，共匹配 ${plan.candidates.length} 项`);
       updateAutofillDebugPlan(plan, { aiStatus, aiUsage });
 
       const autoFillCount = plan.autoFillIds.size;
       setProfilePanelStatus(
         plan.candidates.length > 0
-          ? `${aiStatus} 已匹配 ${plan.candidates.length} 项，将自动填写 ${autoFillCount} 项。`
+          ? `${aiStatus} ${buildPlanMatchSummary(plan)}，共匹配 ${plan.candidates.length} 项，将自动填写 ${autoFillCount} 项。`
           : `${aiStatus} 没有找到可自动匹配的字段。`
       );
-      setAutofillProgress("匹配完成", 90, "本地规则匹配完成，准备自动填写当前网页");
+      setAutofillProgress("匹配完成", 90, `${buildPlanMatchSummary(plan)}，准备自动填写当前网页`);
       return {
         ok: true,
         plan,
@@ -5485,7 +6293,7 @@
       const adapter = getActiveSiteAdapter();
       const adapterLabel = adapter ? `${adapter.name || adapter.id || "通用"} · ` : "";
       if (autofillProgress.active) {
-        status.textContent = `${adapterLabel}${getAutofillProgressTitle() || autofillProgress.stage || "正在处理"}，请不要重复点击。`;
+        status.textContent = `${adapterLabel}${getAutofillProgressDetail() || getAutofillProgressTitle() || autofillProgress.stage || "正在处理"}`;
       } else {
         status.textContent = activeSection
           ? `${adapterLabel}正在查看：${getProfileSectionTitle(activeSection) || activeSection.category}。内容可直接选中复制。`
