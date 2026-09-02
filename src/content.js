@@ -1,5 +1,5 @@
 (() => {
-  const SCRIPT_VERSION = "0.2.1-local";
+  const SCRIPT_VERSION = "0.2.2-local";
   const PANEL_ID = "ojaf-profile-panel";
   const FLOAT_ID = "ojaf-floating-status";
   const STYLE_ID = "ojaf-autofill-style-v2";
@@ -5319,8 +5319,17 @@
     const selectedOptions = Array.from(
       container?.querySelectorAll?.('[role="option"][aria-selected="true"],[aria-selected="true"]') || []
     );
-    return selectedOptions.some((option) =>
+    if (selectedOptions.some((option) =>
       valuesLookEquivalent(getElementText(option) || option.getAttribute("data-value") || "", expected, field, "choice")
+    )) {
+      return true;
+    }
+
+    const selectedLabels = Array.from(
+      container?.querySelectorAll?.('.ant-select-selection-item,[class*="select-selection-item"],[data-selected-value]') || []
+    );
+    return selectedLabels.some((label) =>
+      valuesLookEquivalent(getElementText(label) || label.getAttribute("data-selected-value") || "", expected, field, "choice")
     );
   }
 

@@ -1,11 +1,15 @@
 {
   "name": "resumefill-local",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "scripts": {
+    "test:install": "playwright install chromium",
     "test": "playwright test",
     "test:combobox": "playwright test tests/combobox.spec.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0"

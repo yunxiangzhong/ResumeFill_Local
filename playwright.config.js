@@ -1,7 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const executablePath = process.env.RESUMEFILL_CHROME_PATH ||
-  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const executablePath = process.env.RESUMEFILL_CHROME_PATH || undefined;
 
 export default defineConfig({
   testDir: "./tests",
@@ -12,8 +11,8 @@ export default defineConfig({
   use: {
     browserName: "chromium",
     headless: true,
-    launchOptions: {
-      executablePath
-    }
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+    launchOptions: executablePath ? { executablePath } : {}
   }
 });
