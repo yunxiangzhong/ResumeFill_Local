@@ -1,19 +1,4 @@
 const fields = {
-  apiMode: document.getElementById("apiMode"),
-  apiKey: document.getElementById("apiKey"),
-  model: document.getElementById("model"),
-  modelPreset: document.getElementById("modelPreset"),
-  modelOptions: document.getElementById("modelOptions"),
-  useJsonResponseFormat: document.getElementById("useJsonResponseFormat"),
-  baseUrl: document.getElementById("baseUrl"),
-  endpointPath: document.getElementById("endpointPath"),
-  extraHeadersJson: document.getElementById("extraHeadersJson"),
-  customUrl: document.getElementById("customUrl"),
-  customMethod: document.getElementById("customMethod"),
-  customHeadersJson: document.getElementById("customHeadersJson"),
-  customBodyTemplate: document.getElementById("customBodyTemplate"),
-  customResponsePath: document.getElementById("customResponsePath"),
-  saveApiButton: document.getElementById("saveApiSettings"),
   saveProfileButton: document.getElementById("saveProfile"),
   profileSectionEditor: document.getElementById("profileSectionEditor"),
   profileSelect: document.getElementById("profileSelect"),
@@ -25,35 +10,13 @@ const fields = {
   profileTips: document.getElementById("profileTips"),
   profileFileInput: document.getElementById("profileFileInput"),
   profileFeedback: document.getElementById("profileFeedback"),
-  apiFeedback: document.getElementById("apiFeedback"),
-  apiPreviewBox: document.getElementById("apiPreviewBox"),
-  apiPreview: document.getElementById("apiPreview"),
-  checkUpdateButton: document.getElementById("checkUpdate"),
-  openUpdateButton: document.getElementById("openUpdatePage"),
-  updateFeedback: document.getElementById("updateFeedback"),
   toast: document.getElementById("toast"),
   status: document.getElementById("status")
 };
 
 const PROFILE_SCHEMA_VERSION = 2;
 const LEGACY_PROFILE_BACKUP_FORMAT = "OpenJobAutofillProfileBackup";
-const SAVE_API_LABEL = fields.saveApiButton?.textContent || "保存 API 设置";
 const SAVE_PROFILE_LABEL = fields.saveProfileButton?.textContent || "保存资料";
-const CHECK_UPDATE_LABEL = fields.checkUpdateButton?.textContent || "检查更新";
-const API_CONFIG_FIELD_KEYS = [
-  "apiMode",
-  "apiKey",
-  "model",
-  "useJsonResponseFormat",
-  "baseUrl",
-  "endpointPath",
-  "extraHeadersJson",
-  "customUrl",
-  "customMethod",
-  "customHeadersJson",
-  "customBodyTemplate",
-  "customResponsePath"
-];
 
 const RESUME_SECTION_GUIDE = [
   {
@@ -462,20 +425,13 @@ const STRUCTURED_RESUME_SECTIONS = [
 
 let activeProfileSectionKey = "";
 let profileSectionSyncFrame = 0;
-let apiHasUnsavedChanges = false;
-let apiSettingsLoaded = false;
-let savedApiConfigKey = "";
 let profileHasUnsavedChanges = false;
 let profileEditorBaseline = null;
+let profileLoadedId = "";
+let profileLoadedRevision = 0;
 let profileSaveFeedbackTimer = 0;
 let toastTimer = 0;
 
-document.getElementById("settingsForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  await saveApiSettings();
-});
-document.getElementById("refreshModels").addEventListener("click", refreshModelList);
-document.getElementById("testConnection").addEventListener("click", testConnection);
 fields.saveProfileButton.addEventListener("click", saveProfile);
 document.getElementById("exportProfile").addEventListener("click", exportProfile);
 document.getElementById("importProfile").addEventListener("click", () => fields.profileFileInput.click());
@@ -485,42 +441,26 @@ fields.profileSelect?.addEventListener("change", () => void switchActiveProfile(
 fields.newProfileButton?.addEventListener("click", () => void createNewProfile());
 fields.renameProfileButton?.addEventListener("click", () => void renameActiveProfile());
 fields.deleteProfileButton?.addEventListener("click", () => void removeActiveProfile());
-fields.modelPreset.addEventListener("change", () => {
-  if (fields.modelPreset.value) {
-    fields.model.value = fields.modelPreset.value;
-    setInlineFeedback(`已选择候选模型：${fields.modelPreset.value}`);
-    setApiDirty("已选择候选模型，点击“保存 API 设置”后才会生效。");
-  }
-});
-fields.model.addEventListener("input", syncModelPresetFromCurrentModel);
-fields.apiMode.addEventListener("change", async () => {
-  updateModeBlocks();
-  await maybeAutoRefreshModelList();
-});
-fields.baseUrl.addEventListener("change", () => maybeAutoRefreshModelList());
-fields.customUrl.addEventListener("change", () => maybeAutoRefreshModelList());
-registerApiDirtyTracking();
 fields.profileFileInput.addEventListener("change", importProfileFromFile);
 fields.profileSectionEditor.addEventListener("input", handleProfileEditorInput);
 fields.profileSectionEditor.addEventListener("focusin", handleProfileSectionFocus);
 fields.profileSectionEditor.addEventListener("click", handleStructuredProfileClick);
-fields.checkUpdateButton?.addEventListener("click", () => {
-  void checkUpdate();
-});
-fields.openUpdateButton?.addEventListener("click", () => {
-  void openUpdatePage();
-});
 window.addEventListener("scroll", scheduleProfileSectionSync, { passive: true });
 window.addEventListener("resize", scheduleProfileSectionSync);
 
 loadSettings();
-loadUpdateStatus();
 
 function renderProfileManager(settings = {}) {
   if (!fields.profileSelect) {
     return;
   }
   const profiles = Array.isArray(settings.profiles) ? settings.profiles : [];
+  if (settings.activeProfileId) {
+    profileLoadedId = settings.activeProfileId;
+  }
+  if (settings.revision != null && Number.isFinite(Number(settings.revision))) {
+    profileLoadedRevision = Number(settings.revision);
+  }
   fields.profileSelect.replaceChildren();
   for (const profile of profiles) {
     const option = document.createElement("option");
@@ -553,14 +493,19 @@ async function switchActiveProfile(id) {
     return;
   }
   if (!confirmProfileSwitch()) {
-    // The browser has already changed the select value. Reload settings so a
-    // cancelled confirmation cannot leave the control and editor out of sync.
-    await loadSettings();
+    // Restore only the select value. The editor remains untouched so a
+    // cancelled switch never discards the current draft.
+    if (fields.profileSelect && profileLoadedId) {
+      fields.profileSelect.value = profileLoadedId;
+    }
     return;
   }
   try {
     setProfileManagerFeedback("正在切换...");
-    const settings = await sendRuntimeMessage({ type: "OJAF_SWITCH_PROFILE", payload: { id } });
+    const settings = await sendRuntimeMessage({
+      type: "OJAF_SWITCH_PROFILE",
+      payload: { id, expectedRevision: profileLoadedRevision }
+    });
     renderProfileManager(settings);
     renderProfileSectionEditor(settings.profileV2);
     setProfileSaved("已切换简历，资料保存在本机。");
@@ -580,7 +525,10 @@ async function createNewProfile() {
     return;
   }
   try {
-    const settings = await sendRuntimeMessage({ type: "OJAF_CREATE_PROFILE", payload: { name } });
+    const settings = await sendRuntimeMessage({
+      type: "OJAF_CREATE_PROFILE",
+      payload: { name, expectedRevision: profileLoadedRevision }
+    });
     renderProfileManager(settings);
     renderProfileSectionEditor(settings.profileV2);
     setProfileSaved("已创建空白简历。请填写后保存。");
@@ -599,7 +547,11 @@ async function renameActiveProfile() {
   try {
     const settings = await sendRuntimeMessage({
       type: "OJAF_RENAME_PROFILE",
-      payload: { id: fields.profileSelect?.value, name }
+      payload: {
+        id: fields.profileSelect?.value,
+        name,
+        expectedRevision: profileLoadedRevision
+      }
     });
     renderProfileManager(settings);
     setStatus(`已将简历重命名为 ${getActiveProfileName(settings)}。`);
@@ -614,7 +566,10 @@ async function removeActiveProfile() {
     return;
   }
   try {
-    const settings = await sendRuntimeMessage({ type: "OJAF_DELETE_PROFILE", payload: { id } });
+    const settings = await sendRuntimeMessage({
+      type: "OJAF_DELETE_PROFILE",
+      payload: { id, expectedRevision: profileLoadedRevision }
+    });
     renderProfileManager(settings);
     renderProfileSectionEditor(settings.profileV2);
     setProfileSaved("已切换到保留的简历。");
@@ -629,7 +584,7 @@ function getActiveProfileName(settings = {}) {
 }
 
 window.addEventListener("beforeunload", (event) => {
-  if (!profileHasUnsavedChanges && !apiHasUnsavedChanges) {
+  if (!profileHasUnsavedChanges) {
     return;
   }
 
@@ -641,170 +596,19 @@ async function loadSettings() {
   try {
     const settings = await sendRuntimeMessage({ type: "OJAF_GET_SETTINGS" });
     renderProfileManager(settings);
-    applyApiConfig(settings.apiConfig);
-    setApiSaved("API 设置已加载，当前没有未保存修改。");
     renderProfileNav();
     renderProfileTips(RESUME_SECTION_GUIDE[0]?.key);
     renderProfileSectionEditor(settings.profileV2);
     setProfileSaved("资料已加载，当前没有未保存修改。");
     scheduleProfileSectionSync();
-    updateModeBlocks();
     setStatus("设置已加载。");
-    // Network and AI settings are intentionally disabled in ResumeFill Local.
   } catch (error) {
     setStatus(`加载失败：${error.message}`, true);
   }
 }
 
-function applyApiConfig(config) {
-  fields.apiMode.value = config.mode || "openai-compatible";
-  fields.apiKey.value = config.apiKey || "";
-  fields.model.value = config.model || "";
-  fields.useJsonResponseFormat.checked = Boolean(config.useJsonResponseFormat);
-  fields.baseUrl.value = config.baseUrl || "";
-  fields.endpointPath.value = config.endpointPath || "";
-  fields.extraHeadersJson.value = config.extraHeadersJson || "{}";
-  fields.customUrl.value = config.customUrl || "";
-  fields.customMethod.value = config.customMethod || "POST";
-  fields.customHeadersJson.value = config.customHeadersJson || "{}";
-  fields.customBodyTemplate.value = config.customBodyTemplate || "";
-  fields.customResponsePath.value = config.customResponsePath || "";
-}
-
-function collectApiConfig() {
-  validateJsonObject(fields.extraHeadersJson.value, "额外 Headers JSON");
-  validateJsonObject(fields.customHeadersJson.value, "Custom Headers JSON");
-
-  return getApiConfigSnapshotFromFields();
-}
-
-function getApiConfigSnapshotFromFields() {
-  return {
-    mode: fields.apiMode.value,
-    apiKey: fields.apiKey.value.trim(),
-    model: fields.model.value.trim(),
-    useJsonResponseFormat: fields.useJsonResponseFormat.checked,
-    baseUrl: fields.baseUrl.value.trim(),
-    endpointPath: fields.endpointPath.value.trim(),
-    extraHeadersJson: fields.extraHeadersJson.value.trim() || "{}",
-    customUrl: fields.customUrl.value.trim(),
-    customMethod: fields.customMethod.value,
-    customHeadersJson: fields.customHeadersJson.value.trim() || "{}",
-    customBodyTemplate: fields.customBodyTemplate.value,
-    customResponsePath: fields.customResponsePath.value.trim()
-  };
-}
-
-function getApiConfigKey(apiConfig = getApiConfigSnapshotFromFields()) {
-  return JSON.stringify(apiConfig);
-}
-
-function registerApiDirtyTracking() {
-  for (const key of API_CONFIG_FIELD_KEYS) {
-    const field = fields[key];
-    if (!field) {
-      continue;
-    }
-    field.addEventListener("input", () => setApiDirty());
-    field.addEventListener("change", () => setApiDirty());
-  }
-}
-
-function setApiDirty(message = "API 设置已修改，点击“保存 API 设置”后才会生效。") {
-  if (!apiSettingsLoaded) {
-    return;
-  }
-
-  const changed = getApiConfigKey() !== savedApiConfigKey;
-  if (!changed) {
-    apiHasUnsavedChanges = false;
-    updateApiSaveButton();
-    setInlineFeedback("API 设置已恢复到已保存状态。", false, "saved");
-    return;
-  }
-
-  const wasDirty = apiHasUnsavedChanges;
-  apiHasUnsavedChanges = true;
-  updateApiSaveButton();
-  setInlineFeedback(message, false, "dirty");
-  if (!wasDirty) {
-    setStatus("API 设置有未保存修改。自动填写仍会使用上次保存的 API 配置。");
-  }
-}
-
-function setApiSaved(message = "API 设置已保存到本机。", apiConfig = null) {
-  apiSettingsLoaded = true;
-  apiHasUnsavedChanges = false;
-  savedApiConfigKey = getApiConfigKey(apiConfig || getApiConfigSnapshotFromFields());
-  updateApiSaveButton();
-  setInlineFeedback(message, false, "saved");
-}
-
-function setApiSaving(isSaving) {
-  if (!fields.saveApiButton) {
-    return;
-  }
-  fields.saveApiButton.dataset.saving = isSaving ? "true" : "false";
-  updateApiSaveButton();
-}
-
-function updateApiSaveButton() {
-  if (!fields.saveApiButton) {
-    return;
-  }
-  const isSaving = fields.saveApiButton.dataset.saving === "true";
-  fields.saveApiButton.disabled = isSaving;
-  fields.saveApiButton.textContent = isSaving
-    ? "保存中..."
-    : apiHasUnsavedChanges
-      ? `${SAVE_API_LABEL}（有未保存修改）`
-      : SAVE_API_LABEL;
-}
-
-async function saveApiSettings() {
-  setStatus("联网功能已关闭，ResumeFill Local 只使用本地规则。", true);
-  setApiSaved("联网设置已禁用。", {});
-  return;
-
-  /* istanbul ignore next -- disabled local-only compatibility branch */
-  setApiSaving(true);
-  try {
-    const apiConfig = collectApiConfig();
-    let apiPermissionGranted = true;
-    let apiPermissionError = "";
-    try {
-      apiPermissionGranted = await ensureApiHostPermissions(apiConfig, { prompt: true });
-    } catch (error) {
-      apiPermissionGranted = false;
-      apiPermissionError = error.message;
-    }
-
-    await sendRuntimeMessage({
-      type: "OJAF_SAVE_SETTINGS",
-      payload: { apiConfig }
-    });
-
-    if (!apiPermissionGranted) {
-      const reason = apiPermissionError ? `：${apiPermissionError}` : "，测试 API 连接时可以重新授权。";
-      setStatus(`API 设置已保存，但还没有获得 API 域名访问权限${reason}`);
-      setApiSaved("API 设置已保存；如需使用 AI，请在测试 API 连接时授权 API 域名。", apiConfig);
-      showToast("API 设置已保存，AI 使用前还需要授权 API 域名。", "busy");
-      return;
-    }
-
-    setStatus("API 设置保存成功。");
-    setApiSaved("API 设置已保存到本机。", apiConfig);
-    showToast("API 设置已保存到本机。");
-  } catch (error) {
-    setStatus(`保存失败：${error.message}`, true);
-    setInlineFeedback(`保存失败：${error.message}`, true);
-    showToast(`保存失败：${error.message}`, "error");
-  } finally {
-    setApiSaving(false);
-  }
-}
-
 async function saveProfile() {
+  let saved = false;
   try {
     setProfileSaving(true);
     setProfileFeedback("正在保存资料...", "busy");
@@ -812,10 +616,15 @@ async function saveProfile() {
     const profileV2 = collectProfileV2FromEditor();
     const savedSettings = await sendRuntimeMessage({
       type: "OJAF_SAVE_SETTINGS",
-      payload: { profileV2 }
+      payload: {
+        profileV2,
+        profileId: profileLoadedId,
+        expectedRevision: profileLoadedRevision
+      }
     });
     profileEditorBaseline = cloneProfileData(savedSettings?.profileV2 || profileV2);
     renderProfileManager(savedSettings);
+    saved = true;
     setStatus("简历资料保存成功，已保存到本机浏览器。");
     setProfileSaved("资料已保存到本机。");
     showToast("资料已保存到本机。");
@@ -827,6 +636,7 @@ async function saveProfile() {
   finally {
     setProfileSaving(false);
   }
+  return saved;
 }
 
 async function exportProfile() {
@@ -834,7 +644,12 @@ async function exportProfile() {
     if (profileHasUnsavedChanges) {
       const shouldSave = window.confirm("当前简历有未保存修改。导出前先保存吗？");
       if (shouldSave) {
-        await saveProfile();
+        if (!(await saveProfile())) {
+          return;
+        }
+      } else {
+        setStatus("导出已取消：请先保存当前修改。", true);
+        return;
       }
     }
     const profilesData = await sendRuntimeMessage({ type: "OJAF_GET_ALL_PROFILES" });
@@ -869,18 +684,25 @@ async function importProfileFromFile() {
       if (!window.confirm(`这会替换本机现有的 ${imported.profiles.length} 份简历，是否继续？`)) {
         return;
       }
-      const settings = await sendRuntimeMessage({ type: "OJAF_IMPORT_PROFILES", payload: imported });
+      const settings = await sendRuntimeMessage({
+        type: "OJAF_IMPORT_PROFILES",
+        payload: { ...imported, expectedRevision: profileLoadedRevision }
+      });
       renderProfileManager(settings);
       renderProfileSectionEditor(settings.profileV2);
     } else {
-      renderProfileSectionEditor(imported.profileV2);
       const savedSettings = await sendRuntimeMessage({
         type: "OJAF_SAVE_SETTINGS",
-        payload: { profileV2: imported.profileV2 }
+        payload: {
+          profileV2: imported.profileV2,
+          profileId: profileLoadedId,
+          expectedRevision: profileLoadedRevision
+        }
       });
       renderProfileManager(savedSettings);
+      renderProfileSectionEditor(savedSettings.profileV2);
     }
-    setStatus("已导入并保存到本机。资料面板会立即读取当前简历资料。");
+    setStatus("已导入并保存到本机。");
     setProfileSaved("资料已导入并保存到本机。");
     showToast("资料已导入并保存到本机。");
   } catch (error) {
@@ -916,269 +738,6 @@ async function clearLocalData() {
   } catch (error) {
     setStatus(`清空失败：${error.message}`, true);
   }
-}
-
-async function loadUpdateStatus() {
-  try {
-    const state = await sendRuntimeMessage({ type: "OJAF_GET_UPDATE_STATUS" });
-    renderUpdateStatus(state || {});
-  } catch (error) {
-    renderUpdateStatus({ status: "error", error: error.message });
-  }
-}
-
-async function checkUpdate() {
-  setUpdateChecking(true);
-  renderUpdateStatus({ status: "checking" });
-  try {
-    const state = await sendRuntimeMessage({
-      type: "OJAF_CHECK_FOR_UPDATE",
-      payload: { reason: "manual-options" }
-    });
-    renderUpdateStatus(state || {});
-    setStatus(state?.status === "available" ? "发现新版本，可打开 Release 页面更新。" : "更新检查完成。");
-  } catch (error) {
-    renderUpdateStatus({ status: "error", error: error.message });
-    setStatus(formatUpdateStatus({ status: "error", error: error.message }), true);
-  } finally {
-    setUpdateChecking(false);
-  }
-}
-
-async function openUpdatePage() {
-  try {
-    await sendRuntimeMessage({ type: "OJAF_OPEN_UPDATE_PAGE" });
-    setUpdateFeedback("已打开 Release 页面。更新前建议先导出资料备份；更新时不要卸载扩展，覆盖或重新加载后，本机资料和 API 设置会保留。", "saved");
-  } catch (error) {
-    setUpdateFeedback(`打开 Release 页面失败：${error.message}`, "error");
-  }
-}
-
-function setUpdateChecking(isChecking) {
-  if (!fields.checkUpdateButton) {
-    return;
-  }
-
-  fields.checkUpdateButton.disabled = isChecking;
-  fields.checkUpdateButton.textContent = isChecking ? "检查中..." : CHECK_UPDATE_LABEL;
-}
-
-function renderUpdateStatus(state = {}) {
-  setUpdateFeedback(formatUpdateStatus(state), getUpdateFeedbackTone(state.status));
-}
-
-function getUpdateFeedbackTone(status) {
-  if (status === "error") {
-    return "error";
-  }
-  if (status === "available") {
-    return "new";
-  }
-  if (status === "current") {
-    return "saved";
-  }
-  return "";
-}
-
-function setUpdateFeedback(message, state = "") {
-  if (!fields.updateFeedback) {
-    return;
-  }
-
-  fields.updateFeedback.textContent = message;
-  fields.updateFeedback.classList.toggle("error", state === "error");
-  fields.updateFeedback.classList.toggle("is-new", state === "new");
-  fields.updateFeedback.classList.toggle("is-saved", state === "saved");
-}
-
-function formatUpdateStatus(state = {}) {
-  if (state.status === "disabled") {
-    return state.message || "当前不会自动检查更新。";
-  }
-  if (state.status === "checking") {
-    return "正在检查 GitHub Release...";
-  }
-  if (state.status === "available") {
-    const version = state.latestVersion ? ` ${state.latestVersion}` : "";
-    return `发现新版本${version}。更新前建议先导出资料备份；点击“打开 Release 页面”下载更新。不要卸载扩展，覆盖或重新加载后，本机资料和 API 设置会保留。`;
-  }
-  if (state.status === "current") {
-    return `当前已是最新版本 ${state.currentVersion || chrome.runtime.getManifest().version}。`;
-  }
-  if (state.status === "error") {
-    return `检查更新失败：${state.error || "请稍后重试"}`;
-  }
-  return `当前版本 ${chrome.runtime.getManifest().version}。插件会定期检查 GitHub Release。`;
-}
-
-async function testConnection() {
-  setStatus("联网功能已关闭，未进行任何连接测试。", true);
-  return;
-
-  /* istanbul ignore next -- disabled local-only compatibility branch */
-  try {
-    const apiConfig = collectApiConfig();
-    const usingUnsavedConfig = apiHasUnsavedChanges;
-    setStatus(
-      usingUnsavedConfig
-        ? "正在用当前未保存的 API 表单值测试 API 连接；测试成功后还要保存才会用于填写。"
-        : "正在测试 API 连接，不会发送你的资料值..."
-    );
-    setInlineFeedback(
-      usingUnsavedConfig
-        ? "正在用未保存的 API 表单值测试 API 连接..."
-        : "正在测试 API 连接...",
-      false,
-      usingUnsavedConfig ? "dirty" : ""
-    );
-    setApiPreview("");
-    const hasApiPermission = await ensureApiHostPermissions(apiConfig, { prompt: true });
-    if (!hasApiPermission) {
-      throw new Error("未授权 API 域名访问权限，无法测试 API 连接。");
-    }
-
-    const result = await sendRuntimeMessage({
-      type: "OJAF_TEST_CONNECTION",
-      payload: { apiConfig }
-    });
-    setStatus("连接正常，响应预览已显示在 API 设置下方。");
-    setInlineFeedback(
-      usingUnsavedConfig
-        ? "测试成功，但还没保存；点击“保存 API 设置”后才会用于填写。"
-        : result.contentPreview ? "连接正常，响应预览见下方。" : "连接正常。",
-      false,
-      usingUnsavedConfig ? "dirty" : "saved"
-    );
-    setApiPreview(formatConnectionPreview(result));
-  } catch (error) {
-    setStatus(`测试失败：${error.message}`, true);
-    setInlineFeedback(`测试失败：${error.message}`, true);
-    setApiPreview("");
-  }
-}
-
-async function refreshModelList(options = {}) {
-  if (!options.silent) {
-    setStatus("联网功能已关闭，不会刷新模型列表。", true);
-  }
-  return;
-
-  /* istanbul ignore next -- disabled local-only compatibility branch */
-  try {
-    const apiConfig = collectApiConfig();
-    const usingUnsavedConfig = apiHasUnsavedChanges;
-    if (!shouldAttemptModelList(apiConfig)) {
-      if (!options.silent) {
-        const message = "当前配置还不能自动刷新候选模型，请先补全 Base URL 或自定义接口地址。";
-        setStatus(message, true);
-        setInlineFeedback(message, true);
-      }
-      return;
-    }
-
-    if (!options.silent) {
-      setStatus(
-        usingUnsavedConfig
-          ? "正在用当前未保存的 API 表单值刷新候选模型；刷新只更新候选模型，不会保存 API 设置。"
-          : "正在刷新候选模型..."
-      );
-      setInlineFeedback(
-        usingUnsavedConfig
-          ? "正在用未保存的 API 表单值刷新候选模型..."
-          : "正在刷新候选模型...",
-        false,
-        usingUnsavedConfig ? "dirty" : ""
-      );
-    }
-
-    const hasApiPermission = await ensureApiHostPermissions(apiConfig, { prompt: !options.silent });
-    if (!hasApiPermission) {
-      if (!options.silent) {
-        const message = "未授权 API 域名访问权限，无法刷新候选模型。";
-        setStatus(message, true);
-        setInlineFeedback(message, true);
-      }
-      return;
-    }
-
-    const result = await sendRuntimeMessage({
-      type: "OJAF_LIST_MODELS",
-      payload: { apiConfig }
-    });
-    renderModelOptions(Array.isArray(result.models) ? result.models : []);
-
-    const count = Array.isArray(result.models) ? result.models.length : 0;
-    const message = count > 0 ? `已加载 ${count} 个候选模型，仍可手动输入任意模型名。` : "候选模型为空，仍可手动输入模型名。";
-    const suffix = usingUnsavedConfig ? " 还没保存，保存后才会用于填写。" : "";
-    setStatus(`${message}${suffix}`);
-    setInlineFeedback(`${message}${suffix}`, false, usingUnsavedConfig ? "dirty" : "");
-  } catch (error) {
-    if (!options.silent) {
-      setStatus(`刷新候选模型失败：${error.message}`, true);
-      setInlineFeedback(`刷新候选模型失败：${error.message}`, true);
-    }
-  }
-}
-
-async function maybeAutoRefreshModelList(options = {}) {
-  const safeOptions = options && typeof options === "object" ? options : {};
-  try {
-    const apiConfig = collectApiConfig();
-    if (!shouldAttemptModelList(apiConfig)) {
-      return;
-    }
-
-    if (apiConfig.mode === "openai-compatible" && apiConfig.baseUrl) {
-      await refreshModelList({ ...safeOptions, silent: true });
-    } else if (apiConfig.mode === "custom" && apiConfig.customUrl) {
-      await refreshModelList({ ...safeOptions, silent: true });
-    }
-  } catch (error) {
-    if (!safeOptions.silent) {
-      setInlineFeedback(`模型列表自动检测失败：${error.message}`, true);
-    }
-  }
-}
-
-function shouldAttemptModelList(apiConfig) {
-  if (apiConfig.mode === "openai-compatible") {
-    return Boolean(apiConfig.baseUrl);
-  }
-
-  return Boolean(apiConfig.customUrl) && deriveModelListUrl(apiConfig.customUrl) !== "";
-}
-
-function renderModelOptions(models) {
-  const currentModel = fields.model.value.trim();
-  const normalizedModels = models
-    .map((model) => ({
-      id: String(model.id || "").trim(),
-      name: String(model.name || model.id || "").trim()
-    }))
-    .filter((model) => model.id);
-
-  fields.modelOptions.innerHTML = models
-    .map((model) => {
-      const id = escapeHtml(model.id || "");
-      const label = model.name && model.name !== model.id ? ` (${escapeHtml(model.name)})` : "";
-      return `<option value="${id}" label="${label}"></option>`;
-    })
-    .join("");
-
-  fields.modelPreset.innerHTML = [
-    '<option value="">手动输入 / 不使用候选</option>',
-    ...normalizedModels.map((model) => {
-      const label = model.name && model.name !== model.id ? `${model.id} (${model.name})` : model.id;
-      return `<option value="${escapeHtml(model.id)}">${escapeHtml(label)}</option>`;
-    })
-  ].join("");
-  fields.modelPreset.value = normalizedModels.some((model) => model.id === currentModel) ? currentModel : "";
-}
-
-function syncModelPresetFromCurrentModel() {
-  const currentModel = fields.model.value.trim();
-  const matchedOption = Array.from(fields.modelPreset.options).find((option) => option.value === currentModel);
-  fields.modelPreset.value = matchedOption ? currentModel : "";
 }
 
 function profileFields(labels) {
@@ -1482,12 +1041,17 @@ function renderProfileSectionEditor(profileV2) {
   const extras = (parsed.customSections || [])
     .map((section, index) => {
       const key = section.key || `extra-${index}`;
+      const fields = Object.keys(section.values || {}).map((label, valueIndex) => ({
+        key: `extra_${index}_${valueIndex}`,
+        label,
+        type: "text"
+      }));
       return renderStructuredSection(
         {
           key,
           title: section.title,
           kind: "simple",
-          fields: [],
+          fields,
           isExtra: true
         },
         {
@@ -1565,8 +1129,9 @@ function renderStructuredRepeater(section, items = []) {
 
 function renderStructuredItem(section, item, index) {
   const title = item?.title || `${section.itemLabel || section.title} ${index + 1}`;
+  const itemId = item?.id || createClientItemId();
   return `
-    <article class="structured-item" data-structured-item>
+    <article class="structured-item" data-structured-item data-item-id="${escapeHtml(itemId)}">
       <div class="structured-item-head">
         <input class="structured-item-title" data-item-title value="${escapeHtml(title)}" aria-label="${escapeHtml(section.itemLabel || section.title)}标题" />
         <button class="structured-remove" type="button" data-action="remove-structured-item">删除</button>
@@ -1637,6 +1202,7 @@ function getStructuredSectionConfig(key) {
 
 function createBlankStructuredItem(section, index = 0) {
   return {
+    id: createClientItemId(),
     title: `${section.itemLabel || section.title} ${index + 1}`,
     values: {},
     custom: []
@@ -1813,6 +1379,13 @@ function collectProfileV2FromEditor() {
   return mergeProfileV2PreservingUnknown(profileEditorBaseline, profileV2);
 }
 
+function createClientItemId() {
+  if (globalThis.crypto?.randomUUID) {
+    return `item-${crypto.randomUUID()}`;
+  }
+  return `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 function mergeProfileV2PreservingUnknown(baseProfile, editedProfile) {
   const edited = normalizeProfileV2(editedProfile);
   if (!isPlainObject(baseProfile)) {
@@ -1828,16 +1401,23 @@ function mergeProfileV2PreservingUnknown(baseProfile, editedProfile) {
     const baseSection = isPlainObject(merged.sections[key]) ? merged.sections[key] : {};
     if (editedSection.kind === "repeat") {
       const baseItems = Array.isArray(baseSection.items) ? baseSection.items : [];
+      const baseItemsById = new Map(baseItems.filter((item) => item?.id).map((item) => [item.id, item]));
+      const sectionConfig = getStructuredSectionConfig(key);
+      const controlledLabels = new Set((sectionConfig?.fields || []).map((field) => field.label));
       merged.sections[key] = {
         ...baseSection,
         ...editedSection,
-        items: (editedSection.items || []).map((item, index) => {
-          const baseItem = isPlainObject(baseItems[index]) ? baseItems[index] : {};
+        items: (editedSection.items || []).map((item) => {
+          const baseItem = baseItemsById.get(item?.id) || {};
+          const preservedValues = isPlainObject(baseItem.values) ? { ...baseItem.values } : {};
+          for (const label of controlledLabels) {
+            delete preservedValues[label];
+          }
           return {
             ...baseItem,
             ...item,
             values: {
-              ...(isPlainObject(baseItem.values) ? baseItem.values : {}),
+              ...preservedValues,
               ...(isPlainObject(item.values) ? item.values : {})
             },
             custom: Array.isArray(item.custom) ? item.custom : []
@@ -1845,11 +1425,17 @@ function mergeProfileV2PreservingUnknown(baseProfile, editedProfile) {
         })
       };
     } else {
+      const sectionConfig = getStructuredSectionConfig(key);
+      const controlledLabels = new Set((sectionConfig?.fields || []).map((field) => field.label));
+      const preservedValues = isPlainObject(baseSection.values) ? { ...baseSection.values } : {};
+      for (const label of controlledLabels) {
+        delete preservedValues[label];
+      }
       merged.sections[key] = {
         ...baseSection,
         ...editedSection,
         values: {
-          ...(isPlainObject(baseSection.values) ? baseSection.values : {}),
+          ...preservedValues,
           ...(isPlainObject(editedSection.values) ? editedSection.values : {})
         },
         custom: Array.isArray(editedSection.custom) ? editedSection.custom : []
@@ -1859,17 +1445,16 @@ function mergeProfileV2PreservingUnknown(baseProfile, editedProfile) {
 
   const baseCustomSections = Array.isArray(merged.customSections) ? merged.customSections : [];
   const editedCustomSections = Array.isArray(edited.customSections) ? edited.customSections : [];
-  merged.customSections = editedCustomSections.map((section, index) => {
+  merged.customSections = editedCustomSections.map((section) => {
     const baseSection = baseCustomSections.find((candidate) => candidate?.key === section.key)
-      || baseCustomSections[index]
       || {};
     return {
       ...baseSection,
       ...section,
-      values: {
-        ...(isPlainObject(baseSection.values) ? baseSection.values : {}),
-        ...(isPlainObject(section.values) ? section.values : {})
-      },
+      // Every custom value is rendered in the editor. Replacing this object
+      // lets the user clear a value instead of silently restoring it from the
+      // baseline during the merge.
+      values: isPlainObject(section.values) ? section.values : {},
       custom: Array.isArray(section.custom) ? section.custom : []
     };
   });
@@ -1891,9 +1476,11 @@ function cloneProfileData(value) {
 function collectStructuredItems(sectionEl, section) {
   const items = [];
   sectionEl.querySelectorAll("[data-structured-item]").forEach((itemEl, index) => {
+    const id = normalizePlainText(itemEl.dataset.itemId || createClientItemId(), 100);
     const title = normalizePlainText(itemEl.querySelector("[data-item-title]")?.value || `${section.itemLabel || section.title} ${index + 1}`, 120);
     const scopeData = collectStructuredFieldsFromScope(itemEl);
     const item = {
+      id,
       title,
       values: scopeData.values,
       custom: scopeData.custom
@@ -1911,7 +1498,7 @@ function collectStructuredFieldsFromScope(scope) {
   scope.querySelectorAll("[data-field-label]").forEach((control) => {
     const label = control.dataset.fieldLabel || "";
     const value = String(control.value || "").trim();
-    if (label && value) {
+    if (label && !isUnsafeObjectKey(label) && value) {
       values[label] = value;
     }
   });
@@ -1977,7 +1564,7 @@ function normalizeProfileSectionData(config, input) {
       title: config.title,
       kind: "repeat",
       items: Array.isArray(input?.items)
-        ? input.items.map(normalizeProfileItem).filter(hasStructuredItemData)
+        ? input.items.map((item, index) => normalizeProfileItem(item, index)).filter(hasStructuredItemData)
         : []
     };
   }
@@ -1991,8 +1578,9 @@ function normalizeProfileSectionData(config, input) {
   };
 }
 
-function normalizeProfileItem(item = {}) {
+function normalizeProfileItem(item = {}, index = 0) {
   return {
+    id: normalizePlainText(item.id || `item-${index}`, 100),
     title: normalizePlainText(item.title || "", 120),
     values: normalizeValuesObject(item.values),
     custom: normalizeCustomRows(item.custom)
@@ -2018,11 +1606,15 @@ function normalizeValuesObject(values) {
   for (const [label, value] of Object.entries(values)) {
     const cleanLabel = normalizePlainText(label, 120);
     const cleanValue = String(value == null ? "" : value).trim();
-    if (cleanLabel && cleanValue) {
+    if (cleanLabel && !isUnsafeObjectKey(cleanLabel) && cleanValue) {
       result[cleanLabel] = cleanValue;
     }
   }
   return result;
+}
+
+function isUnsafeObjectKey(value) {
+  return ["__proto__", "constructor", "prototype"].includes(String(value));
 }
 
 function normalizeCustomRows(rows) {
@@ -2041,8 +1633,9 @@ function normalizeCustomRows(rows) {
 function createProfileBackup(profilesData) {
   return {
     format: "ResumeFillLocalProfiles",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
+    revision: Number(profilesData?.revision) || 0,
     activeProfileId: profilesData?.activeProfileId || "",
     profiles: Array.isArray(profilesData?.profiles)
       ? profilesData.profiles.map((profile) => ({
@@ -2054,17 +1647,6 @@ function createProfileBackup(profilesData) {
         }))
       : []
   };
-}
-
-function validateJsonObject(text, label) {
-  if (!text.trim()) {
-    return;
-  }
-
-  const parsed = JSON.parse(text);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${label} 必须是 JSON 对象。`);
-  }
 }
 
 function parseImportedProfileBackup(text) {
@@ -2105,27 +1687,9 @@ function parseImportedProfileBackup(text) {
   throw new Error("当前只支持 ResumeFill Local 或 OpenJobAutofill 的资料备份文件。");
 }
 
-function updateModeBlocks() {
-  const mode = fields.apiMode.value;
-  document.querySelectorAll(".mode-block").forEach((block) => {
-    block.hidden = block.dataset.mode !== mode;
-  });
-}
-
 function setStatus(message, isError = false) {
   fields.status.textContent = message;
   fields.status.classList.toggle("error", isError);
-}
-
-function setInlineFeedback(message, isError = false, state = "") {
-  if (!fields.apiFeedback) {
-    return;
-  }
-
-  fields.apiFeedback.textContent = message;
-  fields.apiFeedback.classList.toggle("error", isError);
-  fields.apiFeedback.classList.toggle("is-dirty", state === "dirty");
-  fields.apiFeedback.classList.toggle("is-saved", state === "saved");
 }
 
 function showToast(message, state = "saved", duration = 2800) {
@@ -2156,27 +1720,6 @@ function showToast(message, state = "saved", duration = 2800) {
   }, duration);
 }
 
-function setApiPreview(message) {
-  if (!fields.apiPreviewBox || !fields.apiPreview) {
-    return;
-  }
-
-  const text = String(message || "").trim();
-  fields.apiPreviewBox.hidden = !text;
-  fields.apiPreview.textContent = text;
-}
-
-function formatConnectionPreview(result) {
-  const parts = [];
-  if (result?.parsed !== undefined) {
-    parts.push(`解析结果:\n${JSON.stringify(result.parsed, null, 2).slice(0, 3000)}`);
-  }
-  if (result?.contentPreview) {
-    parts.push(`原始响应预览:\n${String(result.contentPreview).slice(0, 3000)}`);
-  }
-  return parts.join("\n\n") || "连接正常，但接口没有返回可预览内容。";
-}
-
 function sendRuntimeMessage(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(message, (response) => {
@@ -2192,95 +1735,6 @@ function sendRuntimeMessage(message) {
       resolve(response.data);
     });
   });
-}
-
-async function ensureApiHostPermissions(apiConfig, options = {}) {
-  const origins = getApiPermissionOrigins(apiConfig);
-  if (origins.length === 0 || !chrome.permissions) {
-    return true;
-  }
-
-  const permissions = { origins };
-  if (options.prompt) {
-    return requestOptionalPermissions(permissions);
-  }
-
-  return containsOptionalPermissions(permissions);
-}
-
-function getApiPermissionOrigins(apiConfig) {
-  const urls = [];
-  if (apiConfig.mode === "openai-compatible" && apiConfig.baseUrl) {
-    urls.push(apiConfig.baseUrl);
-  }
-  if (apiConfig.mode === "custom" && apiConfig.customUrl) {
-    urls.push(apiConfig.customUrl);
-  }
-
-  return [...new Set(urls.map(toOriginPermissionPattern).filter(Boolean))];
-}
-
-function toOriginPermissionPattern(value) {
-  try {
-    const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      return "";
-    }
-    return `${url.protocol}//${url.hostname}/*`;
-  } catch {
-    return "";
-  }
-}
-
-function containsOptionalPermissions(permissions) {
-  return new Promise((resolve) => {
-    chrome.permissions.contains(permissions, (granted) => {
-      resolve(Boolean(granted));
-    });
-  });
-}
-
-function requestOptionalPermissions(permissions) {
-  return new Promise((resolve, reject) => {
-    chrome.permissions.request(permissions, (granted) => {
-      const error = chrome.runtime.lastError;
-      if (error) {
-        reject(new Error(error.message));
-        return;
-      }
-      resolve(Boolean(granted));
-    });
-  });
-}
-
-function deriveModelListUrl(sourceUrl) {
-  if (!sourceUrl) {
-    return "";
-  }
-
-  try {
-    const url = new URL(sourceUrl);
-    if (url.pathname.endsWith("/chat/completions")) {
-      url.pathname = url.pathname.replace(/\/chat\/completions$/, "/models");
-      return url.toString();
-    }
-    if (url.pathname.endsWith("/completions")) {
-      url.pathname = url.pathname.replace(/\/completions$/, "/models");
-      return url.toString();
-    }
-    if (url.pathname.endsWith("/responses")) {
-      url.pathname = url.pathname.replace(/\/responses$/, "/models");
-      return url.toString();
-    }
-    if (!url.pathname || url.pathname === "/") {
-      url.pathname = "/models";
-      return url.toString();
-    }
-  } catch {
-    return "";
-  }
-
-  return "";
 }
 
 function isPlainObject(value) {

@@ -3,10 +3,20 @@ const STORAGE_KEYS = {
   resumeStore: "resumeStore",
   legacyProfile: "profileV2"
 };
-const PANEL_STATE_KEY = "RESUMEFILL_PANEL_STATE";
+const LEGACY_KEYS_TO_REMOVE = [STORAGE_KEYS.legacyProfile, "apiConfig", "updateState"];
 const MAX_PROFILES = 12;
 const MAX_STRING_LENGTH = 20000;
 const MAX_STORE_CHARS = 5_000_000;
+const MUTATING_MESSAGE_TYPES = new Set([
+  "OJAF_SAVE_SETTINGS",
+  "OJAF_CLEAR_SETTINGS",
+  "OJAF_IMPORT_PROFILES",
+  "OJAF_CREATE_PROFILE",
+  "OJAF_SWITCH_PROFILE",
+  "OJAF_RENAME_PROFILE",
+  "OJAF_DELETE_PROFILE"
+]);
+let mutationQueue = Promise.resolve();
 
 const EMPTY_PROFILE = Object.freeze({
   schemaVersion: PROFILE_SCHEMA_VERSION,
@@ -29,11 +39,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return undefined;
   }
 
-  handleMessage(message)
+  const operation = MUTATING_MESSAGE_TYPES.has(message.type)
+    ? enqueueMutation(() => handleMessage(message))
+    : handleMessage(message);
+  operation
     .then((data) => sendResponse({ ok: true, data }))
     .catch((error) => sendResponse({ ok: false, error: publicError(error) }));
   return true;
 });
+
+function enqueueMutation(operation) {
+  const next = mutationQueue.then(operation, operation);
+  mutationQueue = next.catch(() => undefined);
+  return next;
+}
 
 async function handleMessage(message) {
   switch (message.type) {
@@ -60,20 +79,6 @@ async function handleMessage(message) {
       return renameProfile(message.payload || {});
     case "OJAF_DELETE_PROFILE":
       return deleteProfile(message.payload || {});
-    case "OJAF_SAVE_PROFILE_PANEL_STATE":
-      return savePanelState(message.payload || {});
-    case "OJAF_GET_PROFILE_PANEL_STATE":
-      return getPanelState(message.payload || {});
-    case "OJAF_MAP_FIELDS":
-      return { mappings: [], notes: ["已关闭 AI，本次使用本地规则。"] };
-    case "OJAF_ANALYZE_PAGE_STRUCTURE":
-      return { fieldHints: [], notes: ["已关闭 AI，本次使用本地规则。"], siteType: "local" };
-    case "OJAF_GET_UPDATE_STATUS":
-      return { status: "disabled", message: "当前不会自动检查更新。" };
-    case "OJAF_CHECK_FOR_UPDATE":
-      return { status: "disabled", message: "联网更新检查已关闭，请从信任的仓库手动更新。" };
-    case "OJAF_OPEN_UPDATE_PAGE":
-      return { status: "disabled", opened: false };
     default:
       throw new Error(`未知消息：${message.type}`);
   }
@@ -86,21 +91,32 @@ async function getSettings() {
     profileV2: clone(active.profileV2),
     profiles: store.profiles.map(profileSummary),
     activeProfileId: active.id,
-    apiConfig: {}
+    revision: store.revision
   };
 }
 
 async function saveSettings(payload) {
   const store = await ensureStore();
+  assertExpectedRevision(store, payload.expectedRevision);
+  let changed = false;
   if (payload.activeProfileId) {
-    store.activeId = requireProfileId(store, payload.activeProfileId);
+    const nextActiveId = requireProfileId(store, payload.activeProfileId);
+    changed = changed || store.activeId !== nextActiveId;
+    store.activeId = nextActiveId;
   }
   if (payload.profileV2) {
-    const profile = getActiveProfile(store);
+    const targetId = payload.profileId
+      ? requireProfileId(store, payload.profileId)
+      : store.activeId;
+    const profile = store.profiles.find((item) => item.id === targetId) || getActiveProfile(store);
     profile.profileV2 = normalizeProfile(payload.profileV2);
     profile.updatedAt = Date.now();
+    changed = true;
   }
-  await saveStore(store);
+  if (changed) {
+    bumpRevision(store);
+    await saveStore(store);
+  }
   return getSettings();
 }
 
@@ -113,6 +129,7 @@ async function getAllProfiles() {
   const store = await ensureStore();
   return {
     activeProfileId: store.activeId,
+    revision: store.revision,
     profiles: store.profiles.map((profile) => ({
       ...profileSummary(profile),
       profileV2: clone(profile.profileV2)
@@ -124,6 +141,8 @@ async function importProfiles(payload) {
   if (!Array.isArray(payload.profiles) || payload.profiles.length === 0) {
     throw new Error("备份中没有可导入的简历。");
   }
+  const current = await ensureStore();
+  assertExpectedRevision(current, payload.expectedRevision);
   const profiles = [];
   const ids = new Set();
   for (const input of payload.profiles.slice(0, MAX_PROFILES)) {
@@ -143,12 +162,13 @@ async function importProfiles(payload) {
   const activeId = profiles.some((profile) => profile.id === payload.activeProfileId)
     ? payload.activeProfileId
     : profiles[0].id;
-  await saveStore({ version: 1, activeId, profiles });
+  await saveStore({ version: 2, revision: current.revision + 1, activeId, profiles });
   return getSettings();
 }
 
 async function createProfile(payload) {
   const store = await ensureStore();
+  assertExpectedRevision(store, payload.expectedRevision);
   if (store.profiles.length >= MAX_PROFILES) {
     throw new Error(`最多保存 ${MAX_PROFILES} 份简历。`);
   }
@@ -162,28 +182,35 @@ async function createProfile(payload) {
   };
   store.profiles = [...store.profiles, profile];
   store.activeId = profile.id;
+  bumpRevision(store);
   await saveStore(store);
   return getSettings();
 }
 
 async function switchProfile(payload) {
   const store = await ensureStore();
+  assertExpectedRevision(store, payload.expectedRevision);
   store.activeId = requireProfileId(store, payload.id);
+  bumpRevision(store);
   await saveStore(store);
   return getSettings();
 }
 
 async function renameProfile(payload) {
   const store = await ensureStore();
-  const profile = store.profiles.find((item) => item.id === payload.id) || getActiveProfile(store);
+  assertExpectedRevision(store, payload.expectedRevision);
+  const id = requireProfileId(store, payload.id);
+  const profile = store.profiles.find((item) => item.id === id);
   profile.name = cleanName(payload.name || profile.name);
   profile.updatedAt = Date.now();
+  bumpRevision(store);
   await saveStore(store);
   return getSettings();
 }
 
 async function deleteProfile(payload) {
   const store = await ensureStore();
+  assertExpectedRevision(store, payload.expectedRevision);
   if (store.profiles.length <= 1) {
     throw new Error("至少保留一份简历。可以使用“恢复空白模板”清空内容。");
   }
@@ -192,26 +219,36 @@ async function deleteProfile(payload) {
   if (store.activeId === id) {
     store.activeId = store.profiles[0].id;
   }
+  bumpRevision(store);
   await saveStore(store);
   return getSettings();
 }
 
 async function clearSettings() {
-  await saveStore(createStore());
+  const current = await ensureStore();
+  const next = createStore();
+  // Keep revisions monotonic so a stale settings page cannot restore data
+  // after another window has cleared the local store.
+  next.revision = Math.max(0, Number(current.revision) || 0) + 1;
+  await saveStore(next);
   // Remove keys used by the upstream build as well, so an old API key or
   // update state cannot remain in this extension's local storage after the
   // user asks to clear all local resume data.
-  await chrome.storage.local.remove([
-    STORAGE_KEYS.legacyProfile,
-    "apiConfig",
-    "updateState"
-  ]);
+  await chrome.storage.local.remove(LEGACY_KEYS_TO_REMOVE);
   return getSettings();
 }
 
 async function ensureStore() {
-  const values = await chrome.storage.local.get([STORAGE_KEYS.resumeStore, STORAGE_KEYS.legacyProfile]);
+  const values = await chrome.storage.local.get([
+    STORAGE_KEYS.resumeStore,
+    STORAGE_KEYS.legacyProfile,
+    ...LEGACY_KEYS_TO_REMOVE.filter((key) => key !== STORAGE_KEYS.legacyProfile)
+  ]);
+  const hasLegacyKeys = LEGACY_KEYS_TO_REMOVE.some((key) => values[key] !== undefined);
   if (values[STORAGE_KEYS.resumeStore]) {
+    if (hasLegacyKeys) {
+      await chrome.storage.local.remove(LEGACY_KEYS_TO_REMOVE);
+    }
     return normalizeStore(values[STORAGE_KEYS.resumeStore]);
   }
   const legacyProfile = values[STORAGE_KEYS.legacyProfile]
@@ -219,13 +256,17 @@ async function ensureStore() {
     : clone(EMPTY_PROFILE);
   const store = createStore(legacyProfile);
   await saveStore(store);
+  if (hasLegacyKeys) {
+    await chrome.storage.local.remove(LEGACY_KEYS_TO_REMOVE);
+  }
   return store;
 }
 
 function createStore(profileV2 = EMPTY_PROFILE) {
   const timestamp = Date.now();
   return {
-    version: 1,
+    version: 2,
+    revision: 0,
     activeId: "default",
     profiles: [{
       id: "default",
@@ -245,7 +286,12 @@ function normalizeStore(input) {
   const activeId = safeProfiles.some((profile) => profile.id === input?.activeId)
     ? input.activeId
     : safeProfiles[0].id;
-  return { version: 1, activeId, profiles: safeProfiles };
+  return {
+    version: 2,
+    revision: Number.isFinite(Number(input?.revision)) ? Math.max(0, Number(input.revision)) : 0,
+    activeId,
+    profiles: safeProfiles
+  };
 }
 
 function normalizeStoredProfile(input) {
@@ -257,6 +303,7 @@ function normalizeStoredProfile(input) {
     return null;
   }
   return {
+    ...sanitizeUnknownProperties(input, ["id", "name", "createdAt", "updatedAt", "profileV2"]),
     id,
     name: cleanName(input.name || "未命名简历"),
     createdAt: Number(input.createdAt) || Date.now(),
@@ -270,6 +317,7 @@ function normalizeProfile(input) {
     return clone(EMPTY_PROFILE);
   }
   const result = {
+    ...sanitizeUnknownProperties(input, ["schemaVersion", "updatedAt", "sections", "customSections"]),
     schemaVersion: PROFILE_SCHEMA_VERSION,
     updatedAt: cleanText(input.updatedAt, 80),
     sections: {},
@@ -278,7 +326,7 @@ function normalizeProfile(input) {
   if (input.sections && typeof input.sections === "object" && !Array.isArray(input.sections)) {
     for (const [key, section] of Object.entries(input.sections).slice(0, 80)) {
       const cleanKey = cleanText(key, 100);
-      if (!cleanKey || !section || typeof section !== "object") {
+      if (!cleanKey || isUnsafeObjectKey(cleanKey) || !section || typeof section !== "object") {
         continue;
       }
       result.sections[cleanKey] = normalizeSection(section, cleanKey);
@@ -287,7 +335,7 @@ function normalizeProfile(input) {
   if (Array.isArray(input.customSections)) {
     result.customSections = input.customSections
       .slice(0, 30)
-      .map((section, index) => normalizeSection(section, `custom-${index}`))
+      .map((section, index) => normalizeSection(section, cleanId(section?.key) || `custom-${index}`))
       .filter((section) => Object.keys(section.values || {}).length > 0 || section.custom.length > 0);
   }
   return result;
@@ -296,14 +344,17 @@ function normalizeProfile(input) {
 function normalizeSection(input, key) {
   const title = cleanText(input.title || key, 160) || key;
   if (input.kind === "repeat" || Array.isArray(input.items)) {
+    const itemIds = new Set();
     return {
+      ...sanitizeUnknownProperties(input, ["key", "title", "kind", "items", "values", "custom"]),
       key,
       title,
       kind: "repeat",
-      items: Array.isArray(input.items) ? input.items.slice(0, 50).map(normalizeItem).filter(hasItemData) : []
+      items: Array.isArray(input.items) ? input.items.slice(0, 50).map((item, index) => normalizeItem(item, index, itemIds)).filter(hasItemData) : []
     };
   }
   return {
+    ...sanitizeUnknownProperties(input, ["key", "title", "kind", "items", "values", "custom"]),
     key,
     title,
     kind: "simple",
@@ -312,8 +363,18 @@ function normalizeSection(input, key) {
   };
 }
 
-function normalizeItem(input = {}) {
+function normalizeItem(input = {}, index = 0, usedIds = null) {
+  const baseId = cleanId(input.id) || `item-${index}`;
+  let id = baseId;
+  let suffix = 1;
+  while (usedIds?.has(id)) {
+    id = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+  usedIds?.add(id);
   return {
+    ...sanitizeUnknownProperties(input, ["id", "title", "values", "custom"]),
+    id,
     title: cleanText(input.title || "", 160),
     values: normalizeValues(input.values),
     custom: normalizeRows(input.custom)
@@ -328,7 +389,7 @@ function normalizeValues(input) {
   for (const [label, value] of Object.entries(input).slice(0, 100)) {
     const cleanLabel = cleanText(label, 160);
     const cleanValue = cleanText(value, MAX_STRING_LENGTH);
-    if (cleanLabel && cleanValue) {
+    if (cleanLabel && !isUnsafeObjectKey(cleanLabel) && cleanValue) {
       values[cleanLabel] = cleanValue;
     }
   }
@@ -340,6 +401,7 @@ function normalizeRows(input) {
     return [];
   }
   return input.slice(0, 100).map((row) => ({
+    ...sanitizeUnknownProperties(row, ["label", "value"]),
     label: cleanText(row?.label, 160),
     value: cleanText(row?.value, MAX_STRING_LENGTH)
   })).filter((row) => row.label && row.value);
@@ -351,6 +413,20 @@ function hasItemData(item) {
 
 function getActiveProfile(store) {
   return store.profiles.find((profile) => profile.id === store.activeId) || store.profiles[0];
+}
+
+function bumpRevision(store) {
+  store.revision = Math.max(0, Number(store.revision) || 0) + 1;
+}
+
+function assertExpectedRevision(store, expectedRevision) {
+  if (expectedRevision == null || expectedRevision === "") {
+    return;
+  }
+  const expected = Number(expectedRevision);
+  if (!Number.isFinite(expected) || expected !== Number(store.revision || 0)) {
+    throw new Error("本地资料已在其他窗口更新，请先重新加载后再保存。");
+  }
 }
 
 function requireProfileId(store, id) {
@@ -394,36 +470,6 @@ async function saveStore(store) {
   await chrome.storage.local.set({ [STORAGE_KEYS.resumeStore]: normalized });
 }
 
-async function savePanelState(payload) {
-  if (!chrome.storage.session) {
-    return { saved: false };
-  }
-  const pageKey = cleanText(payload.pageKey, 800);
-  if (!pageKey) {
-    return { saved: false };
-  }
-  const current = await chrome.storage.session.get(PANEL_STATE_KEY);
-  const all = current[PANEL_STATE_KEY] && typeof current[PANEL_STATE_KEY] === "object" ? current[PANEL_STATE_KEY] : {};
-  all[pageKey] = { pageKey, ...(payload.patch || {}), updatedAt: Date.now() };
-  const entries = Object.entries(all)
-    .sort((a, b) => Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
-    .slice(0, 20);
-  await chrome.storage.session.set({ [PANEL_STATE_KEY]: Object.fromEntries(entries) });
-  return { saved: true };
-}
-
-async function getPanelState(payload) {
-  if (!chrome.storage.session) {
-    return null;
-  }
-  const pageKey = cleanText(payload.pageKey, 800);
-  if (!pageKey) {
-    return null;
-  }
-  const current = await chrome.storage.session.get(PANEL_STATE_KEY);
-  return current[PANEL_STATE_KEY]?.[pageKey] || null;
-}
-
 function cleanText(value, maxLength = MAX_STRING_LENGTH) {
   return String(value == null ? "" : value).replace(/\u0000/g, "").trim().slice(0, maxLength);
 }
@@ -433,7 +479,56 @@ function cleanName(value) {
 }
 
 function cleanId(value) {
-  return cleanText(value, 100).replace(/[^a-zA-Z0-9_-]/g, "");
+  const cleaned = cleanText(value, 100).replace(/[^a-zA-Z0-9_-]/g, "");
+  return isUnsafeObjectKey(cleaned) ? "" : cleaned;
+}
+
+function isUnsafeObjectKey(value) {
+  return ["__proto__", "constructor", "prototype"].includes(String(value));
+}
+
+function sanitizeUnknownProperties(input, knownKeys, depth = 0) {
+  if (!input || typeof input !== "object" || Array.isArray(input) || depth > 3) {
+    return {};
+  }
+  const known = new Set(knownKeys || []);
+  const result = {};
+  for (const [key, value] of Object.entries(input).slice(0, 80)) {
+    if (known.has(key) || isUnsafeObjectKey(key)) {
+      continue;
+    }
+    if (typeof value === "string") {
+      result[key] = cleanText(value, MAX_STRING_LENGTH);
+    } else if (typeof value === "number" && Number.isFinite(value)) {
+      result[key] = value;
+    } else if (typeof value === "boolean") {
+      result[key] = value;
+    } else if (Array.isArray(value)) {
+      result[key] = value.slice(0, 50).map((item) => sanitizeUnknownValue(item, depth + 1)).filter((item) => item !== undefined);
+    } else if (value && typeof value === "object") {
+      result[key] = sanitizeUnknownProperties(value, [], depth + 1);
+    }
+  }
+  return result;
+}
+
+function sanitizeUnknownValue(value, depth = 0) {
+  if (typeof value === "string") {
+    return cleanText(value, MAX_STRING_LENGTH);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (Array.isArray(value) && depth <= 3) {
+    return value.slice(0, 50).map((item) => sanitizeUnknownValue(item, depth + 1)).filter((item) => item !== undefined);
+  }
+  if (value && typeof value === "object" && depth <= 3) {
+    return sanitizeUnknownProperties(value, [], depth + 1);
+  }
+  return undefined;
 }
 
 function createId() {

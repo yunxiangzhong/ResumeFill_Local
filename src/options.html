@@ -36,8 +36,8 @@
               <span>打开招聘表单页，点击插件图标里的“开始填写”。</span>
             </li>
           </ol>
-          <p class="optional-api-note">
-            本地模式不需要账号、API Key 或网络权限。表单字段识别和资料取值都在浏览器内完成。
+          <p class="local-note">
+            本地模式不需要账号、网络权限或外部服务。表单字段识别和资料取值都在浏览器内完成。
           </p>
         </div>
       </section>
@@ -88,110 +88,10 @@
       </section>
 
       <section class="grid settings-grid">
-        <section class="card update-card local-only-card">
+        <section class="card local-only-card">
           <h2>本地模式</h2>
-          <p class="hint">联网功能已关闭。更新源码或安装包时请从你信任的仓库手动获取，并在覆盖前导出资料备份。</p>
-          <p id="updateFeedback" class="update-feedback" aria-live="polite">当前不会自动检查更新。</p>
+          <p class="hint">联网功能已移除。更新源码或安装包时请从你信任的仓库手动获取，并在覆盖前导出资料备份。</p>
         </section>
-
-        <form id="settingsForm" class="card disabled-network-settings" hidden>
-          <h2>联网设置（已禁用，仅保留兼容字段）</h2>
-
-          <label>
-            API 模式
-            <select id="apiMode">
-              <option value="openai-compatible">OpenAI 兼容 Chat Completions</option>
-              <option value="custom">自定义请求模板</option>
-            </select>
-          </label>
-
-          <label>
-            API Key
-            <input id="apiKey" type="password" autocomplete="off" placeholder="sk-... 或其他供应商密钥" />
-          </label>
-
-          <label>
-            模型名
-            <input id="model" type="text" list="modelOptions" placeholder="例如 your-custom-model" />
-            <datalist id="modelOptions"></datalist>
-            <span class="field-help">可以手动输入任意模型名；刷新候选模型只会提供建议，不会限制这里的输入。</span>
-          </label>
-
-          <label>
-            模型候选（刷新后可选）
-            <select id="modelPreset">
-              <option value="">手动输入 / 不使用候选</option>
-            </select>
-          </label>
-
-          <div class="mode-block" data-mode="openai-compatible">
-            <label>
-              Base URL
-              <input id="baseUrl" type="url" placeholder="https://api.example.com/v1" />
-            </label>
-
-            <label>
-              接口路径 Endpoint Path
-              <input id="endpointPath" type="text" placeholder="/chat/completions" />
-            </label>
-
-            <label class="checkline">
-              <input id="useJsonResponseFormat" type="checkbox" />
-              <span>请求中加入 response_format: {"type":"json_object"}</span>
-            </label>
-
-            <label>
-              额外 Headers JSON
-              <textarea id="extraHeadersJson" rows="4" spellcheck="false" placeholder='{"x-api-source":"job-autofill"}'></textarea>
-            </label>
-          </div>
-
-          <div class="mode-block" data-mode="custom">
-            <label>
-              自定义接口地址 Custom API URL
-              <input id="customUrl" type="url" placeholder="https://api.example.com/map-fields" />
-            </label>
-
-            <label>
-              Method
-              <select id="customMethod">
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-              </select>
-            </label>
-
-            <label>
-              Custom Headers JSON
-              <textarea id="customHeadersJson" rows="4" spellcheck="false" placeholder='{"authorization":"Bearer xxx"}'></textarea>
-            </label>
-
-            <label>
-              请求模板 Body Template
-              <textarea id="customBodyTemplate" rows="10" spellcheck="false"></textarea>
-            </label>
-
-            <label>
-              响应路径 Response Path
-              <input id="customResponsePath" type="text" placeholder="choices.0.message.content" />
-            </label>
-
-            <p class="hint">
-              可用变量：{{modelJson}}、{{messagesJson}}、{{systemPromptJson}}、{{userPromptJson}}、{{profileJson}}、{{profileCatalogJson}}、{{fieldsJson}}、{{scanJson}}。其中 profile* 变量都是本地字段目录，不含具体值。
-            </p>
-          </div>
-
-          <div class="actions">
-            <button id="saveApiSettings" type="submit">保存 API 设置</button>
-            <button id="refreshModels" class="secondary" type="button">刷新候选模型</button>
-            <button id="testConnection" class="secondary" type="button">测试 API 连接</button>
-          </div>
-
-          <p id="apiFeedback" class="api-feedback" aria-live="polite"></p>
-          <div id="apiPreviewBox" class="api-preview-box" hidden>
-            <div class="api-preview-title">响应预览</div>
-            <pre id="apiPreview" class="api-preview"></pre>
-          </div>
-        </form>
 
       </section>
 
