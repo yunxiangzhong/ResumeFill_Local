@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>OpenJobAutofill 设置</title>
+    <title>ResumeFill Local 设置</title>
     <link rel="stylesheet" href="./options.css" />
   </head>
   <body>
     <main class="page">
       <header class="hero">
         <div>
-          <p class="eyebrow">OpenJobAutofill</p>
+          <p class="eyebrow">ResumeFill Local</p>
           <h1>维护本机简历资料</h1>
-          <p class="hint">数据只保存在本机浏览器里，不会走同步云端。AI 只辅助识别表单字段和可匹配的资料项，不会读取你的简历值。点击开始填写后会自动填写能确定的字段，待处理字段可在资料面板查看和手动复制。</p>
+          <p class="hint">资料只保存在本机浏览器里。ResumeFill Local 不联网、不上传简历、不使用云端 AI；点击开始填写后，全部匹配由本地规则完成。</p>
         </div>
       </header>
 
@@ -37,7 +37,7 @@
             </li>
           </ol>
           <p class="optional-api-note">
-            AI 页面分析是可选增强：如果希望模型辅助理解表单字段，再到下方 API 设置填写 API Key、Base URL 和模型名。测试 API 连接只验证当前表单值，点击“保存 API 设置”后才会用于填写。不配置 API 时仍可使用本地规则填写。
+            本地模式不需要账号、API Key 或网络权限。表单字段识别和资料取值都在浏览器内完成。
           </p>
         </div>
       </section>
@@ -54,6 +54,14 @@
               <h2>简历资料</h2>
               <p class="hint">这里按通用网申栏目拆开填写。保存后资料只保存在本机浏览器里，需要迁移或备份时再导出资料备份。</p>
             </div>
+            <div class="profile-manager" aria-label="简历切换">
+              <label for="profileSelect">当前简历</label>
+              <select id="profileSelect"></select>
+              <button id="newProfile" class="secondary" type="button">新建</button>
+              <button id="renameProfile" class="ghost" type="button">重命名</button>
+              <button id="deleteProfile" class="ghost danger" type="button">删除</button>
+              <p id="profileManagerFeedback" class="field-help" aria-live="polite"></p>
+            </div>
           </div>
           <div id="profileSectionEditor" class="profile-section-editor"></div>
           <div class="actions profile-actions">
@@ -61,7 +69,7 @@
             <button id="exportProfile" class="secondary" type="button">导出资料备份</button>
             <button id="importProfile" class="secondary" type="button">导入资料备份</button>
             <button id="resetProfile" class="ghost" type="button">恢复空白模板</button>
-            <button id="clearLocalData" class="ghost danger" type="button">清空资料和 API 设置</button>
+            <button id="clearLocalData" class="ghost danger" type="button">清空全部本地简历资料</button>
           </div>
           <p id="profileFeedback" class="profile-feedback" aria-live="polite">资料加载后，编辑任意字段会在这里提示是否需要保存。</p>
           <input id="profileFileInput" type="file" accept="application/json,.json" hidden />
@@ -72,7 +80,7 @@
           <div class="privacy-card">
             <div class="privacy-title">隐私边界</div>
             <p>资料只保存在本机浏览器里。</p>
-            <p>AI 只辅助识别表单字段，不接收具体资料值。</p>
+            <p>字段匹配只使用本地规则。</p>
             <p>插件不会自动提交表单。</p>
           </div>
           <div id="profileTips" class="profile-tips"></div>
@@ -80,18 +88,14 @@
       </section>
 
       <section class="grid settings-grid">
-        <section class="card update-card">
-          <h2>版本更新</h2>
-          <p class="hint">插件会定期检查 GitHub Release。发现新版本时，浏览器图标会显示 NEW；更新前建议先导出资料备份。更新时不要卸载扩展，覆盖或重新加载后，本机资料和 API 设置会保留。</p>
-          <div class="actions">
-            <button id="checkUpdate" class="secondary" type="button">检查更新</button>
-            <button id="openUpdatePage" class="ghost" type="button">打开 Release 页面</button>
-          </div>
-          <p id="updateFeedback" class="update-feedback" aria-live="polite">正在读取更新状态...</p>
+        <section class="card update-card local-only-card">
+          <h2>本地模式</h2>
+          <p class="hint">联网功能已关闭。更新源码或安装包时请从你信任的仓库手动获取，并在覆盖前导出资料备份。</p>
+          <p id="updateFeedback" class="update-feedback" aria-live="polite">当前不会自动检查更新。</p>
         </section>
 
-        <form id="settingsForm" class="card">
-          <h2>API 设置（可选，用于 AI 页面分析）</h2>
+        <form id="settingsForm" class="card disabled-network-settings" hidden>
+          <h2>联网设置（已禁用，仅保留兼容字段）</h2>
 
           <label>
             API 模式

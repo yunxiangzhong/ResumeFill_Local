@@ -1,5 +1,5 @@
 (() => {
-  const SCRIPT_VERSION = "0.8.7-ai-first-cn";
+  const SCRIPT_VERSION = "0.1.0-local";
 
   if (window.__OJAF_AUTOFILL_VERSION__ === SCRIPT_VERSION) {
     return;
@@ -321,6 +321,8 @@
     研究方向: ["研究领域"],
     毕业论文: ["论文题目", "毕业论文题目"],
     成绩: ["学习成绩", "GPA分数", "平均成绩"],
+    GPA: ["GPA分数", "平均学分成绩", "平均学分成绩GPA", "绩点", "成绩"],
+    绩点: ["GPA", "GPA分数", "平均学分成绩", "成绩"],
     学历证书编号: ["学历证书号", "毕业证书编号"],
     学历证书号: ["学历证书编号", "毕业证书编号"],
     学位证书编号: ["学位证书号"],
@@ -2794,7 +2796,7 @@
     const titleWrap = document.createElement("div");
     const title = document.createElement("div");
     title.className = "arf-title";
-    title.textContent = "OpenJobAutofill";
+    title.textContent = "ResumeFill Local";
     const subtitle = document.createElement("div");
     subtitle.className = "arf-subtitle";
     subtitle.dataset.role = "subtitle";
@@ -3789,6 +3791,31 @@
       }
     }
 
+    // Prefer exact field labels before evaluating broad page context. Without
+    // this guard, a simple form whose nearby text contains several labels (for
+    // example “姓名 … 电子邮箱 … GPA”) can make every field inherit the last
+    // matching semantic bucket.
+    const textKey = normalizeMatchKey(text);
+    const categoryKey = normalizeMatchKey(category);
+    if (/^姓名$|^真实姓名$/.test(textKey)) {
+      return "fullName";
+    }
+    if (/^电子邮箱$|^邮箱$|^email$|^e-mail$/.test(textKey)) {
+      return "email";
+    }
+    if (/^手机号码$|^手机号$|^手机$|^联系电话$|^电话号码$|^电话$/.test(textKey)) {
+      return "phone";
+    }
+    if (/教育经历|教育背景|学历经历/.test(categoryKey) && /^gpa$|^绩点$|^平均学分成绩$|^成绩$|^学习成绩$|^平均成绩$/.test(textKey)) {
+      return "gpaScore";
+    }
+    if (/教育经历|教育背景|学历经历/.test(categoryKey) && /^班级排名$/.test(textKey)) {
+      return "classRank";
+    }
+    if (/教育经历|教育背景|学历经历/.test(categoryKey) && /^专业排名$|^绩点排名$|^gpa排名$|^成绩排名$/.test(textKey)) {
+      return "majorRank";
+    }
+
     if (/是否患有|传染病|高血压|心脏病|糖尿病|肾炎|精神病|影响工作的疾病|重大疾病/.test(key)) {
       return "declarationDisease";
     }
@@ -4726,6 +4753,12 @@
     const entryBucket = getEntrySemanticBucket(entry);
     if (fieldBucket && entryBucket && fieldBucket === entryBucket) {
       score += 8;
+      if (["gpaScore", "classRank", "majorRank"].includes(fieldBucket)) {
+        // GPA and ranking are ordinary profile values in local mode. An
+        // exact semantic match should clear the normal review threshold even
+        // when the website uses a short label such as “GPA”.
+        score += 6;
+      }
     }
     score += relationBonus;
     score += textMatchScore(fieldText, entry.category) * 2;
@@ -5286,6 +5319,20 @@
   }
 
   async function enhancePlanWithAi(scan, localPlan) {
+    // ResumeFill Local deliberately keeps matching and values in the browser.
+    // The upstream AI path is retained below only as historical reference and
+    // is unreachable in this build.
+    return {
+      plan: {
+        ...localPlan,
+        mappingSource: "本地规则",
+        aiNotes: [],
+        aiPrimaryCount: 0,
+        localFallbackCount: Number(localPlan?.candidates?.length || 0)
+      }
+    };
+
+    /* istanbul ignore next -- disabled local-only compatibility branch */
     const entries = Array.isArray(localPlan?.entries) ? localPlan.entries : getCurrentProfileEntries();
     const profileCatalog = buildProfileCatalogFromEntries(entries);
     if (profileCatalog.fields.length === 0) {
@@ -5325,6 +5372,11 @@
   }
 
   async function enhanceScanWithAi(scan) {
+    // AI/page analysis is intentionally disabled. Local rules are deterministic
+    // and the extension has no network permissions in ResumeFill Local.
+    return { scan };
+
+    /* istanbul ignore next -- disabled local-only compatibility branch */
     try {
       setAutofillAiTrying("表单字段识别");
       setAutofillProgress("AI 识别表单字段", 50, "正在识别字段名称和控件类型");
@@ -6268,7 +6320,7 @@
     panel.setAttribute(PANEL_COLLAPSED_ATTR, profilePanelCollapsed ? "true" : "false");
     if (collapseBtn) {
       collapseBtn.textContent = profilePanelCollapsed ? "资料" : "收起";
-      collapseBtn.title = profilePanelCollapsed ? "展开 OpenJobAutofill 资料面板" : "收起 OpenJobAutofill 资料面板";
+      collapseBtn.title = profilePanelCollapsed ? "展开 ResumeFill Local 资料面板" : "收起 ResumeFill Local 资料面板";
     }
     if (copyCategoryBtn) {
       copyCategoryBtn.disabled = !activeSection;
@@ -6330,13 +6382,27 @@
 
   if (chrome?.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "local" || !changes.profileV2) {
+      if (areaName !== "local") {
         return;
       }
 
-      currentProfileV2 = changes.profileV2.newValue || null;
-      if (profilePanelVisible) {
-        renderProfilePanel();
+      if (changes.resumeStore) {
+        currentProfileLoadPromise = null;
+        void refreshCurrentProfile({ force: true })
+          .then(() => {
+            if (profilePanelVisible) {
+              renderProfilePanel();
+            }
+          })
+          .catch(() => undefined);
+        return;
+      }
+
+      if (changes.profileV2) {
+        currentProfileV2 = changes.profileV2.newValue || null;
+        if (profilePanelVisible) {
+          renderProfilePanel();
+        }
       }
     });
   }

@@ -1,17 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "OpenJobAutofill",
-  "version": "1.0.2",
-  "description": "Local resume profile helper with privacy-first AI page analysis and one-click form filling.",
-  "homepage_url": "https://github.com/Br1an67/OpenJobAutofill",
+  "name": "ResumeFill Local",
+  "version": "0.1.0",
+  "description": "本地优先的中文网申简历填写助手",
+  "homepage_url": "https://github.com/yunxiangzhong/ResumeFill_Local",
   "permissions": [
     "activeTab",
-    "alarms",
     "scripting",
     "storage"
-  ],
-  "host_permissions": [
-    "https://api.github.com/*"
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -19,16 +15,12 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "optional_host_permissions": [
-    "http://*/*",
-    "https://*/*"
-  ],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
   },
   "action": {
-    "default_title": "OpenJobAutofill",
+    "default_title": "ResumeFill Local",
     "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
