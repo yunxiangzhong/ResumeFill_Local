@@ -30,7 +30,7 @@ GPA fields are excluded from automatic matching and filling. Enter them manually
 4. Select the directory containing `manifest.json`.
 5. Open the extension settings and save your local profiles.
 
-No Node.js installation or build step is required.
+No Node.js installation or build step is required to run the extension. Developers can run the local regression suite with `npm install` and `npm test`; tests use only synthetic pages and local Chromium.
 
 ## License and source
 

@@ -1,5 +1,5 @@
 (() => {
-  const SCRIPT_VERSION = "0.2.0-local";
+  const SCRIPT_VERSION = "0.2.1-local";
   const PANEL_ID = "ojaf-profile-panel";
   const FLOAT_ID = "ojaf-floating-status";
   const STYLE_ID = "ojaf-autofill-style-v2";
@@ -1792,6 +1792,10 @@
       .filter((element, index, array) => array.indexOf(element) === index)
       .filter((element) => !element.closest(`#${PANEL_ID}`))
       .filter(isVisible)
+      .filter((element) => {
+        const compositeAncestor = element.parentElement?.closest?.('[role="combobox"]');
+        return !(compositeAncestor && compositeAncestor !== element);
+      })
       .filter((element) => {
         if (!(element instanceof HTMLInputElement) || element.type !== "radio" || !element.name) {
           return true;
@@ -5093,7 +5097,10 @@
       let verificationElement = element;
 
       if (element) {
-        if (candidate.alreadyMatches) {
+        const canTrustExistingComboboxValue =
+          candidate.alreadyMatches &&
+          (getControlType(element) !== "combobox" || hasConfirmedComboboxSelection(element, candidate.value, field));
+        if (canTrustExistingComboboxValue) {
           const liveValue = getControlVerificationValue(element);
           if (isControlValueEquivalent(element, liveValue, candidate.value, field, candidate)) {
             ok = true;
@@ -5236,14 +5243,21 @@
     }
 
     if (element.getAttribute?.("role") === "combobox") {
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        const ownValue = String(element.value || "").trim();
+        if (ownValue) {
+          return ownValue;
+        }
+      }
       const innerInput = element.querySelector?.('input:not([type="hidden"]):not([type="password"]):not([type="file"]),textarea,[contenteditable="true"]');
       const innerValue = innerInput ? String(innerInput.value || innerInput.textContent || "") : "";
       if (innerValue.trim()) {
         return innerValue;
       }
       return String(
-        element.getAttribute("aria-label") ||
-          element.getAttribute("data-value") ||
+        element.getAttribute("data-value") ||
+          element.getAttribute("data-selected-value") ||
+          element.getAttribute("aria-valuetext") ||
           element.textContent ||
           ""
       );
@@ -5268,6 +5282,46 @@
       return String(target.textContent || "");
     }
     return String(element.value || element.textContent || "");
+  }
+
+  function hasConfirmedComboboxSelection(element, expectedValue, field = {}) {
+    if (!element || getControlType(element) !== "combobox") {
+      return true;
+    }
+
+    const expected = String(expectedValue == null ? "" : expectedValue).trim();
+    if (!expected) {
+      return false;
+    }
+
+    const targets = [element, resolveEditableTarget(element)].filter(Boolean);
+    const seenTargets = new Set();
+    for (const target of targets) {
+      if (seenTargets.has(target)) {
+        continue;
+      }
+      seenTargets.add(target);
+      for (const attribute of ["data-value", "data-selected-value", "aria-valuetext"]) {
+        const value = target.getAttribute?.(attribute);
+        if (value && valuesLookEquivalent(value, expected, field, "choice")) {
+          return true;
+        }
+      }
+      if (target.getAttribute?.("aria-selected") === "true") {
+        const value = getElementText(target) || target.value || "";
+        if (valuesLookEquivalent(value, expected, field, "choice")) {
+          return true;
+        }
+      }
+    }
+
+    const container = findChoiceFieldContainer(element);
+    const selectedOptions = Array.from(
+      container?.querySelectorAll?.('[role="option"][aria-selected="true"],[aria-selected="true"]') || []
+    );
+    return selectedOptions.some((option) =>
+      valuesLookEquivalent(getElementText(option) || option.getAttribute("data-value") || "", expected, field, "choice")
+    );
   }
 
   function isControlValueEquivalent(element, actualValue, expectedValue, field, candidate) {
@@ -5317,8 +5371,9 @@
       return { ok: false, reason: "field not found" };
     }
 
-    const type = getControlType(element);
-    if (element.disabled || element.getAttribute("aria-disabled") === "true") {
+    const originalElement = element;
+    const type = getControlType(originalElement);
+    if (originalElement.disabled || originalElement.getAttribute("aria-disabled") === "true") {
       return { ok: false, reason: "field disabled" };
     }
 
@@ -5326,8 +5381,16 @@
       return { ok: false, reason: "file upload requires manual selection" };
     }
 
-    const editableTarget = resolveEditableTarget(element);
-    if (editableTarget && editableTarget !== element) {
+    if (type === "combobox") {
+      const choiceResult = await tryFillCustomChoiceField(originalElement, value, field);
+      if (choiceResult.ok) {
+        return choiceResult;
+      }
+      return { ok: false, reason: "未确认下拉选项，需要手动选择" };
+    }
+
+    const editableTarget = resolveEditableTarget(originalElement);
+    if (editableTarget && editableTarget !== originalElement) {
       element = editableTarget;
     }
 
@@ -5345,19 +5408,6 @@
 
     if (element.getAttribute("role") === "radio" || element.getAttribute("role") === "checkbox") {
       return fillRoleChoice(element, value, field, candidate);
-    }
-
-    if (type === "combobox") {
-      const choiceResult = await tryFillCustomChoiceField(element, value, field);
-      if (choiceResult.ok) {
-        return choiceResult;
-      }
-
-      const textInput = element.querySelector?.('input:not([type="hidden"]):not([type="password"]):not([type="file"]),textarea,[contenteditable="true"]');
-      if (textInput && textInput !== element) {
-        setNativeValue(textInput, value);
-        return { ok: false, reason: "未确认下拉选项，需要手动选择" };
-      }
     }
 
     if (element instanceof HTMLSelectElement) {
