@@ -25,6 +25,12 @@ Education records accept imported GPA values. When the source has no GPA, the fi
 
 Resume parsing runs entirely in the browser with bundled PDF.js and Mammoth resources. Scanned PDFs, legacy `.doc` files and image-only text require conversion before import; verify contacts, dates and experience ownership in the preview.
 
+### Import an existing resume
+
+Open Settings and choose **Import from resume file**. Select a text PDF, DOCX or Markdown file, review and edit the mapped fields, then choose **Confirm and create profile**. Missing values, including GPA, stay blank; text that cannot be mapped reliably remains under **Unclassified content** for review.
+
+![ResumeFill Local settings page and resume import entry point](assets/resumefill-local-settings.png)
+
 ## Installation
 
 1. Download or clone this repository.
