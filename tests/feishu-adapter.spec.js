@@ -215,6 +215,38 @@ test("Feishu data-cy mapping keeps projects separate from works", async ({ page 
   expect(await page.locator('[data-cy="works[0].linkInput"]').getAttribute("title")).toContain("作品模块按用户选择跳过");
 });
 
+test("Feishu basic fields use stable data-cy controls outside the section class", async ({ page }) => {
+  const html = `<!doctype html><html><body>
+    <section class="createFormSection"><h2>基本信息</h2>
+      ${field("name", "姓名", '<input data-cy="nameInput">')}
+      ${field("email", "邮箱", '<input data-cy="emailInput">')}
+    </section>
+  </body></html>`;
+  const data = profile();
+  data.sections.basic.values.邮箱 = "test@example.invalid";
+  await installContentScript(page, { profile: data, html, url: FEISHU_EDIT_URL });
+  const { response } = await runAutofill(page);
+  expect(response.data.ok).toBe(true);
+  expect(await page.locator('[data-cy="nameInput"]').inputValue()).toBe("钟运翔");
+  expect(await page.locator('[data-cy="emailInput"]').inputValue()).toBe("test@example.invalid");
+});
+
+test("Feishu reports a missing module as skipped instead of a phantom field failure", async ({ page }) => {
+  const data = { sections: { project: { title: "项目经历", kind: "repeat", items: [{ title: "项目经历 1", values: { 项目名称: "边缘智能项目" } }] } } };
+  await installContentScript(page, {
+    profile: data,
+    html: '<!doctype html><html><body><main><h1>简历编辑</h1></main></body></html>',
+    url: FEISHU_EDIT_URL
+  });
+  const { response, debug } = await runAutofill(page);
+
+  expect(response.data.pending).toBe(0);
+  expect(response.data.skipped).toBe(1);
+  expect(response.data.message).toContain("已跳过");
+  expect(debug.data.counts.unsupportedModules).toBe(1);
+  expect(debug.data.summary.details[0].status).toBe("skipped");
+});
+
 test("Feishu adapter adds missing repeat items before scanning", async ({ page }) => {
   await installContentScript(page, { profile: profile(), html: editFixture({ withAdder: true, replaceRootOnAdd: true }), url: FEISHU_EDIT_URL });
   const { response, debug } = await runAutofill(page);
@@ -227,6 +259,21 @@ test("Feishu adapter adds missing repeat items before scanning", async ({ page }
 
 });
 
+test("Feishu keeps a conflicting existing education identity for review", async ({ page }) => {
+  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body><section class="resumeEditForm-education"><h2>教育经历</h2><div class="resumeEditForm-item">
+    ${field("education[0].school", "学校名称", '<input data-cy="education[0].schoolInput" value="已存在大学">')}
+    ${field("education[0].degree", "学历", '<input data-cy="education[0].degreeInput">')}
+  </div></section></body></html>`;
+  const data = { sections: { education: { title: "教育经历", kind: "repeat", items: [{ title: "教育经历 1", values: { 学校名称: "湖南大学", 学历: "本科" } }] } } };
+  await installContentScript(page, { profile: data, html, url: FEISHU_EDIT_URL });
+  const { response, debug } = await runAutofill(page);
+
+  expect(response.data.pending).toBeGreaterThan(0);
+  expect(await page.locator('[data-cy="education[0].schoolInput"]').inputValue()).toBe("已存在大学");
+  expect(await page.locator('[data-cy="education[0].schoolInput"]').getAttribute("data-ojaf-mark")).toBe("uncertain");
+  expect(debug.data.summary.details.some((item) => item.reason.includes("已有内容"))).toBe(true);
+});
+
 test("Feishu reports a missing add entry instead of hiding the second record", async ({ page }) => {
   await installContentScript(page, { profile: profile(), html: editFixture(), url: FEISHU_EDIT_URL });
   const { response, debug } = await runAutofill(page);
@@ -236,6 +283,9 @@ test("Feishu reports a missing add entry instead of hiding the second record", a
   expect(debug.data.counts.blocked).toBeGreaterThan(0);
   expect(debug.data.blocked.some((item) => item.reason.includes("添加入口"))).toBe(true);
   expect(debug.data.summary.pending).toBeGreaterThan(0);
+  expect(debug.data.summary.message).not.toContain("candidate_");
+  expect(debug.data.summary.details.some((item) => item.label.includes("教育经历"))).toBe(true);
+  expect(await page.locator('#ojaf-floating-status [data-role="float-title"]').textContent()).toBe("填写结束，仍需处理");
 });
 
 test("Feishu view page asks the user to enter edit mode", async ({ page }) => {
@@ -356,6 +406,57 @@ test("Feishu waits for the aria-controlled dropdown and ignores hidden duplicate
   expect(await page.locator('[data-cy="education[0].schoolInput"]').getAttribute("data-selected-value")).toBe("湖南大学");
 });
 
+test("Feishu refuses to guess when multiple date popups remain visible", async ({ page }) => {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>飞书多日期面板</title><style>
+    .atsx-date-picker-dropdown { position: fixed; left: 10px; top: 10px; width: 180px; min-height: 40px; background: white; z-index: 20; }
+    .atsx-date-picker-period-month-panel-list-item { display: block; min-height: 24px; }
+  </style></head><body><section class="resumeEditForm-education"><h2>教育经历</h2><div class="resumeEditForm-item">
+    ${field("education[0].period", "开始时间", '<input data-cy="education[0].periodInputBegin" placeholder="YYYY-MM">')}
+  </div></section><script>
+    document.querySelector('[data-cy="education[0].periodInputBegin"]').addEventListener('click', () => {
+      for (const id of ['old-calendar', 'live-calendar']) {
+        const popup = document.createElement('div');
+        popup.id = id; popup.className = 'atsx-date-picker-dropdown';
+        popup.innerHTML = '<div class="atsx-date-picker-period-month-panel-list"><div class="atsx-date-picker-period-month-panel-list-item">2021</div></div>';
+        document.body.appendChild(popup);
+      }
+    });
+  </script></body></html>`;
+  const data = specialProfile();
+  await installContentScript(page, { profile: data, html, url: FEISHU_EDIT_URL });
+  const { response, debug } = await runAutofill(page);
+
+  expect(response.data.pending).toBeGreaterThan(0);
+  expect(await page.locator('[data-cy="education[0].periodInputBegin"]').inputValue()).toBe("");
+  expect(debug.data.results.some((item) => item.note.includes("日期面板") || item.note.includes("日期年份"))).toBe(true);
+});
+
+test("Feishu does not treat a changed display label as a confirmed dropdown selection", async ({ page }) => {
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>飞书假选中</title><style>
+    .atsx-select-dropdown { position: fixed; left: 10px; top: 10px; width: 220px; min-height: 30px; background: white; }
+  </style></head><body><section class="resumeEditForm-education"><h2>教育经历</h2><div class="resumeEditForm-item">
+    ${field("education[0].school", "学校名称", '<div data-cy="education[0].schoolInput" role="combobox"><span class="selected"></span></div>')}
+  </div></section><script>
+    const combo = document.querySelector('[role="combobox"]');
+    combo.addEventListener('click', () => {
+      const popup = document.createElement('div'); popup.className = 'atsx-select-dropdown';
+      popup.innerHTML = '<div role="option">湖南大学</div>';
+      popup.firstElementChild.addEventListener('click', () => {
+        combo.querySelector('.selected').textContent = '湖南大学';
+        popup.remove();
+      });
+      document.body.appendChild(popup);
+    });
+  </script></body></html>`;
+  const data = { sections: { education: { title: "教育经历", kind: "repeat", items: [{ title: "教育经历 1", values: { 学校名称: "湖南大学" } }] } } };
+  await installContentScript(page, { profile: data, html, url: FEISHU_EDIT_URL });
+  const { response, debug } = await runAutofill(page);
+
+  expect(response.data.pending).toBeGreaterThan(0);
+  expect(await page.locator('[data-cy="education[0].schoolInput"]').getAttribute("data-ojaf-mark")).toBe("uncertain");
+  expect(debug.data.results.some((item) => item.note.includes("未确认选中状态"))).toBe(true);
+});
+
 test("Feishu keeps long project descriptions intact", async ({ page }) => {
   const data = profile();
   const longText = "项目正文" + "长描述".repeat(180);
@@ -392,6 +493,44 @@ test("Bambu single periodInput fills both start and end months", async ({ page }
   expect(await page.locator('[data-cy="education[0].periodInput"] input').nth(0).inputValue()).toBe("2021-09");
   expect(await page.locator('[data-cy="education[0].periodInput"] input').nth(1).inputValue()).toBe("2025-06");
   expect(await page.locator('[data-cy="education[0].periodInput"]').getAttribute("data-ojaf-mark")).toBe("filled");
+});
+
+test("Bambu periodInput uses the real Begin and End child triggers", async ({ page }) => {
+  const html = `<!doctype html><html><head><style>
+    .atsx-date-picker-dropdown { position: fixed; left: 10px; top: 10px; background: white; z-index: 20; }
+    .atsx-date-picker-period-month-panel-list-item { display: block; min-height: 24px; }
+  </style></head><body>
+    <section class="resumeEditForm-education"><h2>教育经历</h2><div class="resumeEditForm-item">
+      ${field("education[0].period", "起止时间", '<div data-cy="education[0].periodInput"><span data-cy="education[0].periodInputBegin" class="atsx-date-picker-period-month-label">YYYY-MM</span><span data-cy="education[0].periodInputEnd" class="atsx-date-picker-period-month-label">YYYY-MM</span></div>')}
+    </div></section>
+    <script>
+      const opens = [];
+      document.querySelectorAll('[data-cy$="periodInputBegin"],[data-cy$="periodInputEnd"]').forEach((trigger) => trigger.addEventListener('click', () => {
+        opens.push(trigger.dataset.cy);
+        const suffix = trigger.dataset.cy.endsWith('Begin') ? 'Begin' : 'End';
+        const popup = document.createElement('div');
+        popup.className = 'atsx-date-picker-dropdown';
+        popup.dataset.cy = 'education[0].periodInput' + suffix + 'Dropdown';
+        popup.innerHTML = '<div class="atsx-date-picker-period-month-panel-list">' + ['2021','2025'].map((v) => '<div class="atsx-date-picker-period-month-panel-list-item" data-cy="' + v + '">' + v + '</div>').join('') + '</div>';
+        popup.querySelectorAll('[data-cy]').forEach((year) => year.addEventListener('click', () => {
+          popup.innerHTML = '<div class="atsx-date-picker-period-month-panel-list">' + ['06','09'].map((v) => '<div class="atsx-date-picker-period-month-panel-list-item" data-cy="' + v + '">' + v + '</div>').join('') + '</div>';
+          popup.querySelectorAll('[data-cy]').forEach((month) => month.addEventListener('click', () => { trigger.textContent = year.dataset.cy + '-' + month.dataset.cy; popup.remove(); }));
+        }));
+        document.body.appendChild(popup);
+      }));
+      window.getOpens = () => opens;
+    </script>
+  </body></html>`;
+  const data = specialProfile();
+  await installContentScript(page, { profile: data, html, url: FEISHU_EDIT_URL });
+  const { response } = await runAutofill(page);
+  expect(response.data.ok).toBe(true);
+  expect(await page.locator('[data-cy="education[0].periodInputBegin"]').textContent()).toBe("2021-09");
+  expect(await page.locator('[data-cy="education[0].periodInputEnd"]').textContent()).toBe("2025-06");
+  expect(await page.evaluate(() => window.getOpens())).toEqual([
+    "education[0].periodInputBegin",
+    "education[0].periodInputEnd"
+  ]);
 });
 
 test("Bambu partial periodInput stays pending instead of treating one matching month as complete", async ({ page }) => {

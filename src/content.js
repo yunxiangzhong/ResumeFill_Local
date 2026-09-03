@@ -1,5 +1,5 @@
 (() => {
-  const SCRIPT_VERSION = "0.2.4-local";
+  const SCRIPT_VERSION = "0.2.5-local";
   const PANEL_ID = "ojaf-profile-panel";
   const FLOAT_ID = "ojaf-floating-status";
   const STYLE_ID = "ojaf-autofill-style-v2";
@@ -10,6 +10,7 @@
   document.getElementById(PANEL_ID)?.remove();
   if (previousVersion && previousVersion !== SCRIPT_VERSION) {
     document.getElementById(FLOAT_ID)?.remove();
+    document.getElementById(STYLE_ID)?.remove();
     document.getElementById("ojaf-autofill-style")?.remove();
   }
 
@@ -212,6 +213,7 @@
   ];
 
   const FEISHU_SECTION_CATEGORIES = {
+    basic: "基本信息",
     basicInfoSection: "基本信息",
     education: "教育经历",
     internship: "实习经历",
@@ -226,6 +228,7 @@
 
   const FEISHU_FIELD_ALIASES = {
     name: ["姓名"],
+    email: ["邮箱", "电子邮箱", "邮件", "email", "e-mail"],
     school: ["学校名称", "学校"],
     degree: ["学历"],
     fieldOfStudy: ["专业", "专业名称"],
@@ -761,6 +764,7 @@
 
   function getAutofillRuntimeState() {
     return {
+      scriptVersion: SCRIPT_VERSION,
       autofillInProgress,
       autofillProgress: { ...autofillProgress },
       autofillSummary: autofillSummary ? { ...autofillSummary } : null
@@ -1653,6 +1657,15 @@
 
   function parseFeishuDataCy(dataCy) {
     const text = String(dataCy || "");
+    const basicMatch = text.match(/^(?:basic(?:Info)?(?:\[\d+\])?[._-])?(name|email)(?:Input)?$/i);
+    if (basicMatch) {
+      return {
+        sectionKey: "basic",
+        itemIndex: 0,
+        fieldKey: basicMatch[1].toLowerCase(),
+        part: ""
+      };
+    }
     const match = text.match(/^(education|internship|career|project|works|language|award|sns)\[(\d+)\]\.([^.]+?)(?:Input)?(Begin|End)?$/i);
     if (!match) {
       return null;
@@ -1717,6 +1730,9 @@
     }
     if (info.sectionKey === "project" && info.fieldKey === "role") {
       return "项目角色";
+    }
+    if (info.sectionKey === "basic" && info.fieldKey === "email") {
+      return "邮箱";
     }
     return FEISHU_FIELD_ALIASES[info.fieldKey]?.[0] || "";
   }
@@ -1831,7 +1847,8 @@
 
   function hasMeaningfulControlValue(element, label, currentValue) {
     const value = normalizeText(currentValue, 120);
-    if (!value || /^(请选择|请先选择|无数据|undefined|null)$/i.test(value)) {
+    const isDatePlaceholder = isFeishuPeriodControl(element) && /^(?:Y{4}\s*[-/.年]\s*M{1,2}|YYYY-MM(?:\s*\n\s*YYYY-MM)?)$/i.test(value);
+    if (!value || isDatePlaceholder || /^(请选择|请先选择|无数据|undefined|null)$/i.test(value)) {
       return false;
     }
 
@@ -1946,7 +1963,25 @@
       })
       .filter((element) => {
         const feishuFieldAncestor = element.parentElement?.closest?.('[data-cy$="Input"]');
-        return !(feishuFieldAncestor && feishuFieldAncestor !== element);
+        if (!feishuFieldAncestor || feishuFieldAncestor === element) {
+          return true;
+        }
+        // ATSX period wrappers contain the only interactive controls that
+        // open the picker. Keep those Begin/End children in the scan, while
+        // still collapsing ordinary nested inputs into their data-cy host.
+        const dataCy = element.getAttribute("data-cy") || "";
+        return /periodInput(?:Begin|End)$/.test(dataCy);
+      })
+      .filter((element) => {
+        // A range host is only a logical fallback when the page does not
+        // expose separate Begin/End triggers. Otherwise scanning both the
+        // host and its children creates duplicate date candidates and makes
+        // the non-interactive host receive the write first.
+        const dataCy = element.getAttribute("data-cy") || "";
+        if (!/periodInput$/.test(dataCy)) {
+          return true;
+        }
+        return !element.querySelector('[data-cy$="periodInputBegin"],[data-cy$="periodInputEnd"]');
       })
       .filter((element) => {
         if (!(element instanceof HTMLInputElement) || element.type !== "radio" || !element.name) {
@@ -2241,6 +2276,25 @@
         color: #6f6a60;
         font-size: 12px;
       }
+      #${FLOAT_ID} .arf-float-reasons {
+        margin-top: 10px;
+        padding: 8px 10px;
+        border: 1px dashed rgba(191, 122, 24, 0.42);
+        border-radius: 11px;
+        color: #6f6a60;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      #${FLOAT_ID} .arf-float-reasons summary {
+        color: #9a5b0a;
+        cursor: pointer;
+        font-weight: 700;
+      }
+      #${FLOAT_ID} .arf-float-reasons [data-role="float-reason-list"] {
+        display: grid;
+        gap: 4px;
+        margin-top: 6px;
+      }
       #${FLOAT_ID} .arf-float-privacy {
         margin-top: 8px;
         padding: 8px 10px;
@@ -2295,6 +2349,9 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
         margin-top: 12px;
+      }
+      #${FLOAT_ID} .arf-float-chips.has-skip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
       #${FLOAT_ID} .arf-float-chip {
         padding: 8px;
@@ -2703,6 +2760,10 @@
         </div>
         <button class="arf-float-close" type="button" data-action="float-hide" title="隐藏">×</button>
       </div>
+      <details class="arf-float-reasons" data-role="float-reasons" hidden>
+        <summary>查看待处理明细</summary>
+        <div data-role="float-reason-list"></div>
+      </details>
       <div class="arf-float-privacy">隐私：资料只保存在本机；插件不会自动提交。</div>
       <div class="arf-float-mode" data-role="float-mode" hidden></div>
       <div class="arf-float-progress" data-role="float-progress">
@@ -2741,6 +2802,9 @@
         : [],
       unmatched: Array.isArray(summary?.unmatched)
         ? summary.unmatched.map((item) => ({ ...item }))
+        : [],
+      details: Array.isArray(summary?.details)
+        ? summary.details.map((item) => ({ ...item }))
         : []
     };
     renderFloatingStatus();
@@ -2760,6 +2824,8 @@
     const progress = floating.querySelector('[data-role="float-progress"]');
     const fill = floating.querySelector('[data-role="float-fill"]');
     const chips = floating.querySelector('[data-role="float-chips"]');
+    const reasons = floating.querySelector('[data-role="float-reasons"]');
+    const reasonList = floating.querySelector('[data-role="float-reason-list"]');
 
     if (autofillProgress.active) {
       const modeBadge = getAutofillModeBadgeText(autofillProgress);
@@ -2777,6 +2843,7 @@
       }
       if (chips) {
         chips.hidden = true;
+        chips.classList.remove("has-skip");
         chips.textContent = "";
       }
       if (modeFlag) {
@@ -2789,7 +2856,9 @@
     const summary = autofillSummary || {};
     const modeBadge = getAutofillCompletionBadgeText();
     if (title) {
-      title.textContent = "填写完成";
+      title.textContent = Number(summary.pending || 0) > 0
+        ? "填写结束，仍需处理"
+        : "填写完成";
     }
     if (detail) {
       detail.textContent = summary.message || "请直接在页面上检查绿色已填写和橙色待处理标记。";
@@ -2799,14 +2868,28 @@
     }
     if (chips) {
       chips.hidden = false;
+      const skipped = Number(summary.skipped || 0);
+      chips.classList.toggle("has-skip", skipped > 0);
       chips.innerHTML = `
         <div class="arf-float-chip is-ok"><strong>${summary.filled || 0}</strong>已填写</div>
         <div class="arf-float-chip is-warn"><strong>${summary.pending || 0}</strong>待处理</div>
+        ${skipped > 0 ? `<div class="arf-float-chip"><strong>${skipped}</strong>已跳过</div>` : ""}
       `;
     }
     if (modeFlag) {
       modeFlag.hidden = !modeBadge;
       modeFlag.textContent = modeBadge || "";
+    }
+    if (reasons && reasonList) {
+      const details = Array.isArray(summary.details) ? summary.details : [];
+      reasons.hidden = details.length === 0;
+      reasonList.textContent = "";
+      details.forEach((item) => {
+        const row = document.createElement("div");
+        const status = item.status === "skipped" ? "已跳过" : "待处理";
+        row.textContent = `[${status}] ${item.label || "页面字段"}：${item.reason || "需要手动复核"}`;
+        reasonList.append(row);
+      });
     }
   }
 
@@ -4805,7 +4888,11 @@
     if (category && !feishuCategoryMatches(entry?.category, category)) {
       return -9999;
     }
-    if (info.sectionKey && info.itemIndex >= 0 && getEntryOccurrenceIndex(entry) !== info.itemIndex + 1) {
+    const identityScore = getFeishuRepeatIdentityScore(field, entry, entries);
+    if (identityScore === -9999) {
+      return -9999;
+    }
+    if (!identityScore && info.sectionKey && !["basic", "sns"].includes(info.sectionKey) && info.itemIndex >= 0 && getEntryOccurrenceIndex(entry) !== info.itemIndex + 1) {
       return -9999;
     }
 
@@ -4828,7 +4915,60 @@
       aliases.push("结束时间");
     }
     const normalizedAliases = aliases.map((value) => normalizeMatchKey(value));
-    return entryLabels.some((label) => normalizedAliases.includes(label)) ? 180 : -9999;
+    return entryLabels.some((label) => normalizedAliases.includes(label)) ? 180 + Math.max(0, identityScore || 0) : -9999;
+  }
+
+  function getFeishuRepeatIdentityScore(field, entry, entries) {
+    const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+    if (!info || !["education", "internship", "career", "project", "award", "language"].includes(info.sectionKey)) {
+      return 0;
+    }
+    const element = findFieldElement(field);
+    const root = findRepeatItemRoot(element);
+    if (!root) {
+      return 0;
+    }
+    const identityPatterns = {
+      education: /学校|专业|入学时间|开始时间|结束时间|毕业时间/,
+      internship: /公司|单位|职位|职务|开始时间|结束时间/,
+      career: /公司|单位|职位|职务|开始时间|结束时间/,
+      project: /项目名称|项目名|项目角色|角色|开始时间|结束时间|项目链接/,
+      award: /奖项|获奖名称|奖惩名称|获奖时间|奖项时间/,
+      language: /语言|语种|精通程度|熟练程度/
+    };
+    const pattern = identityPatterns[info.sectionKey];
+    if (!pattern) {
+      return 0;
+    }
+    const sourceItems = (entries || []).filter((item) =>
+      feishuCategoryMatches(item?.category, FEISHU_SECTION_CATEGORIES[info.sectionKey]) &&
+      item?.subsection === entry?.subsection
+    );
+    const sourceByLabel = new Map(sourceItems.map((item) => [normalizeMatchKey(item.label), item]));
+    let matched = 0;
+    const controls = collectVisibleControls(root);
+    for (const control of controls) {
+      const label = normalizeFieldLabelText(getControlContextLabel(control));
+      if (!pattern.test(label)) {
+        continue;
+      }
+      const current = getControlCurrentValue(control);
+      if (!hasMeaningfulControlValue(control, label, current)) {
+        continue;
+      }
+      const source = sourceByLabel.get(normalizeMatchKey(label)) || sourceItems.find((item) => {
+        const sourceLabel = normalizeMatchKey(item?.label);
+        return sourceLabel && (sourceLabel === normalizeMatchKey(label) || pattern.test(item?.label || ""));
+      });
+      if (!source || !source.value) {
+        continue;
+      }
+      if (!valuesLookEquivalent(current, source.value, field, "text")) {
+        return -9999;
+      }
+      matched += 1;
+    }
+    return matched;
   }
 
   function getFeishuMappedValue(field, entry, entries) {
@@ -5169,9 +5309,15 @@
         return leftPriority - rightPriority;
       })
       .map((item) => {
-        const label = item?.fieldLabel || item?.field?.label || item?.id || "字段";
+        const rawLabel = item?.fieldLabel || item?.field?.label || "字段";
+        const label = /^candidate_/i.test(String(rawLabel)) ? "页面字段" : rawLabel;
+        const category = item?.fieldCategory || item?.field?.section || "";
+        const index = Number.isInteger(item?.itemIndex) ? item.itemIndex : null;
+        const location = index != null && /教育经历|实习经历|工作经历|项目经历|奖惩情况|语言能力/.test(category)
+          ? `${category}第${index + 1}条 · `
+          : "";
         const reason = item?.reason || item?.note || "需要手动复核";
-        return `${label}：${reason}`;
+        return `${location}${label}：${reason}`;
       })
       .filter(Boolean)
       .slice(0, 2)
@@ -5301,6 +5447,14 @@
       fieldId: item?.fieldId || item?.field?.fieldId || "",
       fieldLabel: normalizeText(item?.fieldLabel || item?.field?.label || "", 120),
       fieldCategory: normalizeText(item?.fieldCategory || item?.field?.section || "", 80),
+      itemIndex: Number.isInteger(item?.itemIndex)
+        ? item.itemIndex
+        : Number.isInteger(item?.field?.feishuInfo?.itemIndex)
+          ? item.field.feishuInfo.itemIndex
+          : null,
+      part: normalizeText(item?.part || item?.field?.feishuInfo?.part || "", 20),
+      status: item?.status || "pending",
+      reasonCode: item?.reasonCode || getDeferredReasonCode(item),
       reason: normalizeText(item?.reason || "待处理", 180)
     };
   }
@@ -5310,7 +5464,13 @@
       id: result?.id || "",
       ok: Boolean(result?.ok),
       skipped: Boolean(result?.skipped),
-      note: normalizeText(result?.note || "", 180)
+      status: result?.status || (result?.ok ? "filled" : result?.skipped ? "skipped" : "pending"),
+      note: normalizeText(result?.note || "", 180),
+      fieldLabel: normalizeText(result?.fieldLabel || "", 120),
+      fieldCategory: normalizeText(result?.fieldCategory || "", 80),
+      itemIndex: Number.isInteger(result?.itemIndex) ? result.itemIndex : null,
+      part: normalizeText(result?.part || "", 20),
+      reasonCode: normalizeText(result?.reasonCode || "", 50)
     };
   }
 
@@ -5348,11 +5508,13 @@
         needsConfirm: confirmCount,
         ignored: ignoredCount,
         unmatched: Array.isArray(plan.unmatched) ? plan.unmatched.length : 0,
-        blocked: Array.isArray(plan.blocked) ? plan.blocked.length : 0
+        blocked: Array.isArray(plan.blocked) ? plan.blocked.length : 0,
+        unsupportedModules: Array.isArray(plan.unsupportedModules) ? plan.unsupportedModules.length : 0
       },
       candidates,
       unmatched: Array.isArray(plan.unmatched) ? plan.unmatched.map(summarizeDeferredItem) : [],
       blocked: Array.isArray(plan.blocked) ? plan.blocked.map(summarizeDeferredItem) : [],
+      unsupportedModules: Array.isArray(plan.unsupportedModules) ? plan.unsupportedModules.map(summarizeDeferredItem) : [],
       summary: null,
       results: []
     };
@@ -5385,7 +5547,8 @@
       skippedReasons: Array.isArray(summary?.skippedReasons)
         ? summary.skippedReasons.map(summarizeDeferredItem)
         : [],
-      unmatched: Array.isArray(summary?.unmatched) ? summary.unmatched.map(summarizeDeferredItem) : []
+      unmatched: Array.isArray(summary?.unmatched) ? summary.unmatched.map(summarizeDeferredItem) : [],
+      details: Array.isArray(summary?.details) ? summary.details.map((item) => ({ ...item })) : []
     };
     lastAutofillDebug.results = Array.isArray(results) ? results.map(summarizeDebugResult) : [];
     lastAutofillDebug.finishedAt = new Date().toISOString();
@@ -5410,6 +5573,7 @@
     const allFields = Array.isArray(scan?.fields) ? scan.fields.filter(Boolean) : [];
     const visibleFields = allFields.filter((field) => field.canFill);
     const unmatched = [];
+    const unsupportedModules = [];
     const blocked = allFields
       .filter((field) => !field.canFill)
       .map((field) => ({
@@ -5431,14 +5595,19 @@
               : "当前控件暂不支持自动填写"
       }));
     for (const missing of scan?.repeatPreparation?.missing || []) {
-      blocked.push({
+      const item = {
         id: `repeat_${missing.section || "unknown"}`,
         fieldId: "",
         field: null,
         fieldLabel: missing.section || "重复经历模块",
         fieldCategory: missing.section || "",
         reason: missing.reason || "经历条目无法自动添加"
-      });
+      };
+      if (item.reason === "页面没有对应模块") {
+        unsupportedModules.push(item);
+      } else {
+        blocked.push(item);
+      }
     }
     const fieldCounters = new Map();
     const fieldTotals = new Map();
@@ -5465,6 +5634,8 @@
       field.fieldOccurrenceTotal = fieldTotals.get(field.occurrenceKey) || 1;
       let bestEntry = null;
       let bestScore = -9999;
+      let bestIdentityScore = 0;
+      let ambiguousBest = false;
 
       for (const entry of entries) {
         if (!entry?.hasValue) {
@@ -5475,13 +5646,22 @@
         const score = feishuScore == null
           ? scoreAutofillCandidate(field, entry, fieldLabel, fieldCategory)
           : feishuScore;
+        const identityScore = feishuScore != null && feishuScore >= 180
+          ? getFeishuRepeatIdentityScore(field, entry, entries)
+          : 0;
         if (score > bestScore) {
           bestScore = score;
           bestEntry = entry;
+          bestIdentityScore = identityScore;
+          ambiguousBest = false;
+        } else if (score >= 18 && score === bestScore && bestEntry && entry !== bestEntry && identityScore > 0 && bestIdentityScore > 0) {
+          // Two equally strong identity matches (for example, duplicate school
+          // names) cannot be assigned safely without an explicit tie breaker.
+          ambiguousBest = true;
         }
       }
 
-      if (!bestEntry || bestScore < 18) {
+      if (!bestEntry || bestScore < 18 || ambiguousBest) {
         const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
         unmatched.push({
           id: `unmatched_${field.fieldId}`,
@@ -5489,7 +5669,9 @@
           field,
           fieldLabel,
           fieldCategory,
-          reason: info?.sectionKey === "works"
+          reason: ambiguousBest
+            ? "同名经历无法唯一确认，请手动复核"
+            : info?.sectionKey === "works"
             ? "作品模块按用户选择跳过"
             : "未匹配到本机简历资料"
         });
@@ -5531,6 +5713,7 @@
       candidates,
       unmatched,
       blocked,
+      unsupportedModules,
       autoFillIds: new Set(candidates.filter((candidate) => candidate.shouldAutoFill).map((candidate) => candidate.id))
     };
   }
@@ -5571,7 +5754,8 @@
           scan: baseScan,
           candidates: [],
           unmatched: [],
-          blocked: []
+          blocked: [],
+          unsupportedModules: []
         });
         setProfilePanelStatus(reason, true);
         return { ok: false, reason: "login page", message: reason };
@@ -5584,7 +5768,8 @@
           scan: baseScan,
           candidates: [],
           unmatched: [],
-          blocked: []
+          blocked: [],
+          unsupportedModules: []
         });
         setProfilePanelStatus(reason, true);
         return { ok: false, reason: "view page", message: reason, editLink: baseScan.editLink || "" };
@@ -5641,27 +5826,59 @@
 
       if (!plan || autoFillIds.size === 0) {
         const deferred = await markDeferredPlanCandidates(plan, autoFillIds);
+        const unsupportedModules = Array.isArray(plan?.unsupportedModules) ? plan.unsupportedModules : [];
+        const unsupportedDetails = unsupportedModules.map((item) => ({
+          label: formatPendingItemLabel(item),
+          reason: item.reason || "模板没有对应模块，无法填写",
+          status: "skipped"
+        }));
+        const pendingDetails = deferred.items.map((item) => ({
+          label: formatPendingItemLabel(item),
+          reason: item.reason || "需要手动复核",
+          status: "pending"
+        }));
         const summary = {
           attempted: 0,
           filled: 0,
           failed: 0,
-          skipped: deferred.count,
-          total: deferred.count,
+          skipped: unsupportedModules.length,
+          total: deferred.count + unsupportedModules.length,
           pending: deferred.count,
-          skippedReasons: deferred.items,
+          skippedReasons: unsupportedModules,
           unmatched: plan?.unmatched || [],
+          details: [...pendingDetails, ...unsupportedDetails],
           message: deferred.count > 0
-            ? `填写结束，仍需处理 ${deferred.count} 项。${buildPendingReasonPreview(deferred.items)}。`
-            : "填写结束，没有找到可自动填写的字段。"
+            ? `填写结束，仍需处理 ${deferred.count} 项。${buildPendingReasonPreview(deferred.items)}${unsupportedModules.length > 0 ? `；已跳过 ${unsupportedModules.length} 个模板缺失模块` : ""}。`
+            : unsupportedModules.length > 0
+              ? `填写完成，已跳过 ${unsupportedModules.length} 个模板缺失模块。${buildPendingReasonPreview(unsupportedModules)}。`
+              : "填写结束，没有找到可自动填写的字段。"
         };
         setProfilePanelStatus(summary.message, deferred.count > 0);
         setAutofillSummary(summary);
-        updateAutofillDebugResults(summary, deferred.items.map((item) => ({
-          id: item.id,
-          ok: false,
-          note: item.reason,
-          skipped: true
-        })));
+        updateAutofillDebugResults(summary, [
+          ...deferred.items.map((item) => ({
+            id: item.id,
+            ok: false,
+            note: item.reason,
+            skipped: false,
+            status: "pending",
+            fieldLabel: item.fieldLabel,
+            fieldCategory: item.fieldCategory,
+            itemIndex: item.itemIndex,
+            reasonCode: getDeferredReasonCode(item)
+          })),
+          ...unsupportedModules.map((item) => ({
+            id: item.id,
+            ok: false,
+            note: item.reason,
+            skipped: true,
+            status: "skipped",
+            fieldLabel: item.fieldLabel,
+            fieldCategory: item.fieldCategory,
+            itemIndex: item.itemIndex,
+            reasonCode: "unsupported_module"
+          }))
+        ]);
         return {
           ok: false,
           reason: "no candidates",
@@ -5681,11 +5898,12 @@
         filled: fillResult.filled || 0,
         failed: fillResult.failed || 0,
         skipped: fillResult.skipped || 0,
-        pending: (fillResult.failed || 0) + (fillResult.skipped || 0),
+        pending: fillResult.pending ?? ((fillResult.failed || 0) + (fillResult.skipped || 0)),
         total: fillResult.total || 0,
         message: fillResult.message || "",
         skippedReasons: fillResult.skippedReasons || [],
-        unmatched: fillResult.unmatched || []
+        unmatched: fillResult.unmatched || [],
+        details: fillResult.details || []
       };
     } catch (error) {
       setProfilePanelStatus(`一键填写失败：${error.message}`, true);
@@ -5751,9 +5969,10 @@
       }
 
       if (element) {
-        markElement(element, ok ? "filled" : "uncertain", `${ok ? "自动填写" : "待处理"}: ${candidate.fieldLabel || candidate.sourceLabel || candidate.id}`);
+        const displayLabel = formatPendingItemLabel(candidate);
+        markElement(element, ok ? "filled" : "uncertain", `${ok ? "自动填写" : "待处理"}: ${displayLabel}`);
         if (verificationElement && verificationElement !== element) {
-          markElement(verificationElement, ok ? "filled" : "uncertain", `${ok ? "自动填写" : "待处理"}: ${candidate.fieldLabel || candidate.sourceLabel || candidate.id}`);
+          markElement(verificationElement, ok ? "filled" : "uncertain", `${ok ? "自动填写" : "待处理"}: ${displayLabel}`);
         }
       }
 
@@ -5765,34 +5984,68 @@
       results.push({
         id: candidate.id,
         ok,
-        note
+        status: ok ? "filled" : "pending",
+        note,
+        fieldLabel: candidate.fieldLabel || field?.label || "字段",
+        fieldCategory: candidate.fieldCategory || field?.section || "",
+        itemIndex: Number.isInteger(field?.feishuInfo?.itemIndex) ? field.feishuInfo.itemIndex : null,
+        part: field?.feishuInfo?.part || "",
+        reasonCode: ok ? "filled" : (candidate.hasConflict ? "existing_conflict" : "fill_failed")
       });
     }
 
     const filledCount = results.filter((result) => result.ok).length;
     const failedCount = results.length - filledCount;
     const deferred = await markDeferredPlanCandidates(plan, autoFillSet);
-    const skippedCount = deferred.count;
-    const pendingCount = failedCount + skippedCount;
+    const unsupportedModules = Array.isArray(plan?.unsupportedModules) ? plan.unsupportedModules : [];
+    const skippedCount = unsupportedModules.length;
+    const pendingCount = failedCount + deferred.count;
+    const pendingItems = [
+      ...results.filter((result) => !result.ok).map((result) => ({
+        label: formatPendingItemLabel(result),
+        reason: result.note || "需要手动复核",
+        status: "pending"
+      })),
+      ...deferred.items.map((item) => ({
+        label: formatPendingItemLabel(item),
+        reason: item.reason || "需要手动复核",
+        status: "pending"
+      }))
+    ];
+    const skippedItems = unsupportedModules.map((item) => ({
+      label: formatPendingItemLabel(item),
+      reason: item.reason || "模板没有对应模块，无法填写",
+      status: "skipped"
+    }));
     const summary = {
       attempted: results.length,
       filled: filledCount,
       failed: failedCount,
       skipped: skippedCount,
       pending: pendingCount,
-      total: autoFillCandidates.length + skippedCount,
-      skippedReasons: deferred.items,
+      total: filledCount + pendingCount + skippedCount,
+      skippedReasons: unsupportedModules,
       unmatched: plan?.unmatched || [],
+      details: [...pendingItems, ...skippedItems],
       message: pendingCount > 0
         ? `填写结束，仍需处理 ${pendingCount} 项。${buildPendingReasonPreview([
-            ...results.filter((result) => !result.ok).map((result) => ({ fieldLabel: result.id, note: result.note })),
+            ...results.filter((result) => !result.ok).map((result) => ({
+              fieldLabel: result.fieldLabel,
+              fieldCategory: result.fieldCategory,
+              itemIndex: result.itemIndex,
+              part: result.part,
+              note: result.note
+            })),
             ...deferred.items
-          ])}。`
-        : "填写结束，所有匹配项均已填写。"
+          ])}${skippedCount > 0 ? `；已跳过 ${skippedCount} 个模板缺失模块` : ""}。`
+        : skippedCount > 0
+          ? `填写完成，已跳过 ${skippedCount} 个模板缺失模块。${buildPendingReasonPreview(unsupportedModules)}。`
+          : "填写结束，所有匹配项均已填写。"
     };
     const resultItems = [
       ...results,
-      ...deferred.items.map((item) => ({ id: item.id, ok: false, note: item.reason, skipped: true }))
+      ...deferred.items.map((item) => ({ id: item.id, ok: false, note: item.reason, skipped: false, status: "pending", fieldLabel: item.fieldLabel, fieldCategory: item.fieldCategory, itemIndex: item.itemIndex, reasonCode: getDeferredReasonCode(item) })),
+      ...unsupportedModules.map((item) => ({ id: item.id, ok: false, note: item.reason, skipped: true, status: "skipped", fieldLabel: item.fieldLabel, fieldCategory: item.fieldCategory, itemIndex: item.itemIndex, reasonCode: "unsupported_module" }))
     ];
     setProfilePanelStatus(summary.message, pendingCount > 0);
     setAutofillSummary(summary);
@@ -5807,9 +6060,44 @@
       results: resultItems,
       pending: pendingCount,
       message: summary.message,
-      skippedReasons: deferred.items,
-      unmatched: plan?.unmatched || []
+      skippedReasons: unsupportedModules,
+      unmatched: plan?.unmatched || [],
+      details: summary.details
     };
+  }
+
+  function formatPendingItemLabel(item) {
+    const label = item?.fieldLabel || item?.field?.label || "页面字段";
+    const category = item?.fieldCategory || item?.field?.section || "";
+    const index = Number.isInteger(item?.itemIndex)
+      ? item.itemIndex
+      : Number.isInteger(item?.field?.feishuInfo?.itemIndex)
+        ? item.field.feishuInfo.itemIndex
+        : null;
+    if (index != null && /教育经历|实习经历|工作经历|项目经历|奖惩情况|语言能力/.test(category)) {
+      return `${category}第${index + 1}条 · ${label}`;
+    }
+    return /^candidate_/i.test(String(label)) ? "页面字段" : label;
+  }
+
+  function getDeferredReasonCode(item) {
+    const reason = String(item?.reason || "");
+    if (/没有可填写|未匹配到|资料没有/.test(reason)) {
+      return "missing_profile_data";
+    }
+    if (/同名|无法唯一|歧义|多个/.test(reason)) {
+      return "ambiguous_match";
+    }
+    if (/已有内容|冲突/.test(reason)) {
+      return "existing_conflict";
+    }
+    if (/不可|只读|敏感|附件|作品/.test(reason)) {
+      return "unsupported_control";
+    }
+    if (/日期|下拉|控件|面板|添加/.test(reason)) {
+      return "control_operation_failed";
+    }
+    return "pending_review";
   }
 
   async function markDeferredPlanCandidates(plan, autoFillIds) {
@@ -5837,7 +6125,7 @@
       const element = item.field ? findFieldElement(item.field) : null;
       const reason = item.reason || "需要手动复核";
       if (element) {
-        markElement(element, "uncertain", `待处理: ${item.fieldLabel || item.sourceLabel || item.id}（${reason}）`);
+        markElement(element, "uncertain", `待处理: ${formatPendingItemLabel(item)}（${reason}）`);
       }
       marked.push({ ...item, reason });
       if (marked.length % 12 === 0) {
@@ -5978,6 +6266,14 @@
         if (value && valuesLookEquivalent(value, expected, field, "choice")) {
           return true;
         }
+      }
+      // Generic native comboboxes expose their accepted value directly on
+      // the input. Feishu search inputs are excluded because their text is
+      // only a query until a component selection marker is present.
+      if (field?.siteAdapterId !== "feishu-jobs" &&
+        target instanceof HTMLInputElement && target.getAttribute("role") === "combobox" &&
+        valuesLookEquivalent(target.value, expected, field, "choice")) {
+        return true;
       }
       if (target.getAttribute?.("aria-selected") === "true") {
         const value = getElementText(target) || target.value || "";
@@ -6127,22 +6423,46 @@
     return { ok: true };
   }
 
-  function getVisibleFeishuDatePicker() {
-    return Array.from(document.querySelectorAll(".atsx-date-picker-dropdown:not(.atsx-date-picker-dropdown-hidden)"))
-      .reverse()
-      .find((popup) => isVisible(popup)) || null;
+  function getVisibleFeishuDatePicker(target = null, excluded = new Set()) {
+    const candidates = Array.from(document.querySelectorAll(".atsx-date-picker-dropdown:not(.atsx-date-picker-dropdown-hidden)"))
+      .filter((popup) => isVisible(popup) && !excluded.has(popup));
+    if (!target) {
+      return candidates[candidates.length - 1] || null;
+    }
+    const wrapper = target.closest?.('[data-cy$="periodInput"]');
+    const linkedIds = [target.getAttribute?.("data-cy") ? `${target.getAttribute("data-cy")}Dropdown` : ""]
+      .concat([target.getAttribute?.("aria-controls"), target.getAttribute?.("aria-owns")])
+      .concat(Array.from(wrapper?.querySelectorAll?.("[aria-controls],[aria-owns]") || [])
+        .flatMap((node) => [node.getAttribute("aria-controls"), node.getAttribute("aria-owns")]))
+      .flatMap((value) => String(value || "").split(/\s+/))
+      .filter(Boolean);
+    for (const id of linkedIds) {
+      const linked = document.getElementById(id);
+      if (linked && candidates.includes(linked)) {
+        return linked;
+      }
+    }
+    // Multiple unrelated visible calendars are ambiguous; fail closed instead
+    // of selecting the most recently rendered panel for the wrong date field.
+    return candidates.length === 1 ? candidates[0] : null;
   }
 
   function getFeishuDatePartNode(root, part, value) {
     const expected = String(value || "").replace(/^0+(?=\d)/, "");
-    const nodes = Array.from(root?.querySelectorAll?.(".atsx-date-picker-period-month-panel-list-item") || [])
+    const columns = Array.from(root?.querySelectorAll?.(".atsx-date-picker-period-month-panel-list") || [])
+      .filter(isVisible);
+    const scoped = columns.length > 1
+      ? columns[part === "year" ? 0 : 1]
+      : columns[0] || root;
+    const nodes = Array.from(scoped?.querySelectorAll?.(".atsx-date-picker-period-month-panel-list-item") || [])
       .filter(isVisible);
     return nodes.find((node) => {
       const text = normalizeExactValue(getElementText(node));
+      const dataCy = normalizeExactValue(node.getAttribute?.("data-cy"));
       if (part === "year") {
-        return text === String(value) || text.includes(String(value));
+        return text === String(value) || dataCy === String(value);
       }
-      const match = text.match(/\d{1,2}/);
+      const match = (dataCy || text).match(/\d{1,2}/);
       return Boolean(match && String(Number(match[0])) === expected);
     }) || null;
   }
@@ -6212,11 +6532,12 @@
   }
 
   async function selectFeishuCurrentDateValue(element) {
+    const existingPopups = new Set(Array.from(document.querySelectorAll(".atsx-date-picker-dropdown")).filter(isVisible));
     if (!clickActionElement(element)) {
       return { ok: false, reason: "日期控件无法打开" };
     }
-    const opened = await waitForCondition(() => Boolean(getVisibleFeishuDatePicker()), 2500);
-    const popup = getVisibleFeishuDatePicker();
+    const opened = await waitForCondition(() => Boolean(getVisibleFeishuDatePicker(element, existingPopups)), 3000);
+    const popup = getVisibleFeishuDatePicker(element, existingPopups);
     const option = (opened && findFeishuCurrentDateOption(popup)) || findFeishuCurrentDateOption(element);
     if (!option) {
       return { ok: false, reason: "日期控件不支持“至今”，需要手动处理" };
@@ -6232,20 +6553,27 @@
     if (!match) {
       return { ok: false, reason: "日期资料缺少可选择的年月" };
     }
+    const existingPopups = new Set(Array.from(document.querySelectorAll(".atsx-date-picker-dropdown")).filter(isVisible));
     if (!clickActionElement(element)) {
       return { ok: false, reason: "日期控件无法打开" };
     }
-    const opened = await waitForCondition(() => Boolean(getVisibleFeishuDatePicker()));
+    const opened = await waitForCondition(() => Boolean(getVisibleFeishuDatePicker(element, existingPopups)), 3000);
     if (!opened) {
       return { ok: false, reason: "日期面板未打开" };
     }
-    let popup = getVisibleFeishuDatePicker();
+    let popup = getVisibleFeishuDatePicker(element, existingPopups);
     const year = getFeishuDatePartNode(popup, "year", match[1]);
     if (!year || !clickActionElement(year)) {
       return { ok: false, reason: `未找到日期年份 ${match[1]}` };
     }
-    await sleep(80);
-    popup = getVisibleFeishuDatePicker();
+    const monthReady = await waitForCondition(() => {
+      popup = getVisibleFeishuDatePicker(element, existingPopups);
+      return Boolean(getFeishuDatePartNode(popup, "month", match[2]));
+    }, 3000);
+    if (!monthReady) {
+      return { ok: false, reason: `未找到日期月份 ${match[2]}` };
+    }
+    popup = getVisibleFeishuDatePicker(element, existingPopups);
     const month = getFeishuDatePartNode(popup, "month", match[2]);
     if (!month || !clickActionElement(month)) {
       return { ok: false, reason: `未找到日期月份 ${match[2]}` };
@@ -6445,8 +6773,6 @@
         let score = 0;
         if (normalized && normalized === expected) {
           score = 2;
-        } else if (choiceTextMatches(label, target)) {
-          score = 1;
         }
         return { option, score };
       })
@@ -6469,19 +6795,16 @@
     }
 
     container.scrollIntoView({ block: "center", inline: "nearest" });
+    const openPopupSelector = '[role="listbox"],[role="menu"],[class*="dropdown"],[class*="Dropdown"],[class*="select-dropdown"],[class*="cascader"],[class*="popover"]';
+    const existingPopups = new Set(Array.from(document.querySelectorAll(openPopupSelector)).filter(isVisible));
     const actionTarget = element instanceof Element
       ? (element.matches?.('[role="combobox"]') ? element : element.querySelector?.('[role="combobox"]') || element)
       : container;
     if (!clickActionElement(actionTarget)) {
       return { ok: false, reason: "选择控件动作被安全策略拦截" };
     }
-    if (container !== element) {
-      if (!clickActionElement(container)) {
-        return { ok: false, reason: "选择控件动作被安全策略拦截" };
-      }
-    }
     const target = normalizeChoiceValue(value, inferFieldLabel(field));
-    const hierarchicalResult = await tryFillHierarchicalChoiceOptions(value, target, container);
+    const hierarchicalResult = await tryFillHierarchicalChoiceOptions(value, target, container, existingPopups, element, field);
     if (hierarchicalResult.ok) {
       return hierarchicalResult;
     }
@@ -6489,10 +6812,10 @@
     let options = [];
     let directMatch = { option: null, ambiguous: false };
     await waitForCondition(() => {
-      options = findVisibleChoiceOptions(container);
+      options = findVisibleChoiceOptions(container, { excludedPopups: existingPopups });
       directMatch = findBestChoiceOption(options, target);
       return Boolean(directMatch.option || directMatch.ambiguous);
-    }, 2500);
+    }, 5000);
     const matched = directMatch.option;
     if (directMatch.ambiguous) {
       return { ok: false, reason: "匹配到多个下拉选项，需要手动选择" };
@@ -6502,8 +6825,10 @@
       if (!clickActionElement(matched)) {
         return { ok: false, reason: "选择控件动作被安全策略拦截" };
       }
-      await sleep(120);
-      return { ok: true };
+      const confirmed = await waitForCondition(() => hasConfirmedComboboxSelection(element, value, field), 1500);
+      return confirmed
+        ? { ok: true }
+        : { ok: false, reason: "下拉选项已点击，但页面未确认选中状态" };
     }
 
     const searchInput =
@@ -6515,10 +6840,10 @@
       let retryOptions = [];
       let retryMatch = { option: null, ambiguous: false };
       await waitForCondition(() => {
-        retryOptions = findVisibleChoiceOptions(container);
+        retryOptions = findVisibleChoiceOptions(container, { excludedPopups: existingPopups });
         retryMatch = findBestChoiceOption(retryOptions, target);
         return Boolean(retryMatch.option || retryMatch.ambiguous);
-      }, 2500);
+      }, 5000);
       const retryMatched = retryMatch.option;
       if (retryMatch.ambiguous) {
         return { ok: false, reason: "匹配到多个下拉选项，需要手动选择" };
@@ -6527,24 +6852,32 @@
         if (!clickActionElement(retryMatched)) {
           return { ok: false, reason: "选择控件动作被安全策略拦截" };
         }
-        await sleep(120);
-        return { ok: true };
+        const confirmed = await waitForCondition(() => hasConfirmedComboboxSelection(element, value, field), 1500);
+        return confirmed
+          ? { ok: true }
+          : { ok: false, reason: "下拉选项已点击，但页面未确认选中状态" };
       }
     }
 
     return { ok: false, reason: "no matching option found" };
   }
 
-  async function tryFillHierarchicalChoiceOptions(value, target, container) {
+  async function tryFillHierarchicalChoiceOptions(value, target, container, excludedPopups = new Set(), element = container, field = {}) {
     const parts = splitHierarchicalChoiceValue(value);
     if (parts.length < 2) {
       return { ok: false, reason: "not hierarchical" };
     }
 
     let matchedAny = false;
-    for (const part of parts) {
-      const options = findVisibleChoiceOptions(container);
-      const match = findBestChoiceOption(options, part);
+    for (let index = 0; index < parts.length; index += 1) {
+      const part = parts[index];
+      let options = [];
+      let match = { option: null, ambiguous: false };
+      await waitForCondition(() => {
+        options = findVisibleChoiceOptions(container, { excludedPopups });
+        match = findBestChoiceOption(options, part);
+        return Boolean(match.option || match.ambiguous);
+      }, 5000);
       const matched = match.option;
       if (match.ambiguous) {
         return { ok: false, reason: "级联选项匹配到多个结果，需要手动选择" };
@@ -6557,10 +6890,29 @@
         return { ok: false, reason: "选择控件动作被安全策略拦截" };
       }
       matchedAny = true;
-      await sleep(180);
+      if (index < parts.length - 1) {
+        const nextPart = parts[index + 1];
+        const nextReady = await waitForCondition(() => {
+          const nextOptions = findVisibleChoiceOptions(container, { excludedPopups });
+          const nextMatch = findBestChoiceOption(nextOptions, nextPart);
+          return Boolean(nextMatch.option || nextMatch.ambiguous);
+        }, 5000);
+        if (!nextReady) {
+          return { ok: false, reason: "级联选项异步加载超时，需要手动选择" };
+        }
+      }
     }
 
-    return { ok: matchedAny };
+    if (!matchedAny) {
+      return { ok: false, reason: "级联选项未完成匹配，需要手动选择" };
+    }
+    const confirmed = await waitForCondition(
+      () => hasConfirmedComboboxSelection(element, value, field),
+      1500
+    );
+    return confirmed
+      ? { ok: true }
+      : { ok: false, reason: "级联选项已点击，但页面未确认选中状态" };
   }
 
   function splitHierarchicalChoiceValue(value) {
@@ -6595,7 +6947,8 @@
     return element.parentElement || element;
   }
 
-  function findVisibleChoiceOptions(container) {
+  function findVisibleChoiceOptions(container, config = {}) {
+    const excludedPopups = config.excludedPopups instanceof Set ? config.excludedPopups : new Set();
     const selectors = [
       '[role="option"]',
       "[aria-selected]",
@@ -6637,7 +6990,7 @@
     if (!hasControlledRelation) {
       const popupRoots = Array.from(document.querySelectorAll(
         '[role="listbox"],[role="menu"],[class*="dropdown"],[class*="Dropdown"],[class*="select-dropdown"],[class*="cascader"],[class*="popover"]'
-      )).filter(isVisible);
+      )).filter((popup) => isVisible(popup) && !excludedPopups.has(popup));
       roots.push(...popupRoots);
     }
     if (roots.length === 0 && container === document) {

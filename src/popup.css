@@ -150,6 +150,28 @@ button.ghost.full {
   white-space: pre-wrap;
 }
 
+#details {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+#details summary {
+  color: var(--primary);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+#detailsList {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
 .update-status {
   margin-bottom: 8px;
   color: var(--muted);

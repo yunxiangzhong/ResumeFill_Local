@@ -6,6 +6,14 @@ const els = {
 };
 
 const DEFAULT_START_LABEL = els.startAutofillBtn?.textContent || "开始填写";
+let lastRuntimeState = null;
+const CONTENT_SCRIPT_VERSION = (() => {
+  try {
+    return `${chrome.runtime.getManifest().version}-local`;
+  } catch {
+    return "0.2.5-local";
+  }
+})();
 
 els.openOptions?.addEventListener("click", () => chrome.runtime.openOptionsPage());
 els.startAutofillBtn?.addEventListener("click", () => void startAutofill());
@@ -29,6 +37,7 @@ async function syncRuntimeState() {
       { injectIfMissing: false }
     );
     const state = response?.data || {};
+    lastRuntimeState = state;
     const busy = Boolean(state.autofillInProgress);
     if (els.startAutofillBtn) {
       els.startAutofillBtn.disabled = busy;
@@ -40,6 +49,7 @@ async function syncRuntimeState() {
       setStatus(summary.message || (pending > 0
         ? `上次填写结束，仍需处理 ${pending} 项。`
         : `上次填写结束，已填写 ${summary.filled || 0} 项。`));
+      renderDetails(summary);
     }
   } catch {
     if (els.startAutofillBtn) {
@@ -56,16 +66,19 @@ async function startAutofill() {
       els.startAutofillBtn.textContent = "处理中...";
     }
     setStatus("正在本地扫描当前页面并准备填写...");
+    await ensureCurrentContentScript();
     const response = await sendToActiveTab({ type: "OJAF_START_AUTOFILL" });
     const data = response?.data || {};
     if (data.ok && data.filled != null) {
       const pending = pendingCount(data);
+      renderDetails(data);
       setStatus(data.message || (pending > 0
         ? `填写结束，仍需处理 ${pending} 项。请复核后手动提交。`
         : `填写结束，已填写 ${data.filled || 0} 项。请复核后手动提交。`));
     } else if (data.reason === "busy") {
       setStatus("当前已有处理任务，请稍候。", true);
     } else if (data.reason === "no candidates") {
+      renderDetails(data);
       setStatus(data.message || "填写结束，仍需处理页面上的字段。", true);
     } else if (data.reason === "view page" || data.reason === "login page") {
       setStatus(data.message || "请先进入飞书简历编辑页并登录后再开始填写。", true);
@@ -79,6 +92,42 @@ async function startAutofill() {
   } finally {
     await syncRuntimeState();
   }
+}
+
+async function ensureCurrentContentScript() {
+  const tabs = await queryTabs({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (!tab?.id) {
+    throw new Error("没有找到当前标签页。");
+  }
+
+  // Opening the popup already performs the runtime-state probe. Reuse it so
+  // clicking start does not create a second probe or a duplicate injection.
+  const state = lastRuntimeState;
+  if (!state) {
+    // Let the actual start message perform the single fallback injection when
+    // the initial probe found no receiver.
+    return;
+  }
+  if (state.autofillInProgress || state.scriptVersion === CONTENT_SCRIPT_VERSION) {
+    return;
+  }
+  await executeScript(tab.id, "src/content.js");
+}
+
+function renderDetails(summary = {}) {
+  const details = document.getElementById("details");
+  const list = document.getElementById("detailsList");
+  if (!details || !list) return;
+  const items = Array.isArray(summary.details) ? summary.details : [];
+  list.textContent = "";
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    const status = item.status === "skipped" ? "已跳过" : "待处理";
+    row.textContent = `[${status}] ${item.label || "页面字段"}：${item.reason || "需要手动复核"}`;
+    list.append(row);
+  });
+  details.hidden = items.length === 0;
 }
 
 async function clearMarks() {
