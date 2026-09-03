@@ -102,11 +102,11 @@
       name: "Moka 招聘",
       urlPattern: /(?:^|\.)(?:mokahr|moka)\.com$/i,
       confidence: 0.9,
-      indicators: [".ant-form-item", "[class*='application-form']", "[class*='questionnaire']", "[class*='schema-form']"],
-      containerSelector: ".ant-form-item,[class*='form-item'],[class*='field-wrapper'],[class*='question-item'],[class*='schema-form-item']",
-      labelSelector: ".ant-form-item-label,label,[class*='field-label'],[class*='question-label'],[class*='question-title']",
-      sectionSelector: ".ant-card-head-title,[class*='module-title'],[class*='questionnaire-title'],[class*='block-title'],h2,h3,h4",
-      repeatItemSelector: ".ant-card,[class*='resume-item'],[class*='experience-item'],[class*='list-item'],[class*='card-item']",
+      indicators: ["[class*='apply-block-']", "[class*='apply-field-']", "[class*='sd-Select-container']", "[class*='day_info']"],
+      containerSelector: "[class*='apply-field-'],[class*='apply-fields-'],.ant-form-item,[class*='form-item'],[class*='field-wrapper'],[class*='question-item'],[class*='schema-form-item']",
+      labelSelector: "[class*='title-'],[class*='filed-title'],[class*='field-title'],label,.ant-form-item-label,[class*='field-label'],[class*='question-label'],[class*='question-title']",
+      sectionSelector: ".ant-card-head-title,[class*='blockTitle'],[class*='block-title'],[class*='module-title'],[class*='questionnaire-title'],h2,h3,h4",
+      repeatItemSelector: "[class*='apply-fields-'],.ant-card,[class*='resume-item'],[class*='experience-item'],[class*='list-item'],[class*='card-item']",
       saveLabels: ["保存", "确定", "下一步", "完成"],
       editLabels: ["编辑", "修改", "完善"]
     },
@@ -250,6 +250,59 @@
   const FEISHU_SECTION_CATEGORY_ALIASES = {
     "语言能力": ["语言能力", "外语能力"]
   };
+
+  const MOKA_SECTION_CATEGORIES = {
+    basic: "基本信息",
+    intention: "求职意向",
+    work: "工作经历",
+    education: "教育经历",
+    internship: "实习经历",
+    project: "项目经历",
+    language: "语言能力",
+    awards: "奖惩情况",
+    self: "自我描述"
+  };
+
+  const MOKA_SECTION_CATEGORY_ALIASES = {
+    基本信息: ["基本信息"],
+    求职意向: ["求职意向"],
+    工作经历: ["工作经历"],
+    教育经历: ["教育经历"],
+    实习经历: ["实习经历"],
+    项目经历: ["项目经历"],
+    语言能力: ["语言能力", "外语能力"],
+    奖惩情况: ["奖惩情况"],
+    自我描述: ["自我描述"]
+  };
+
+  const MOKA_FIELD_ALIASES = {
+    性别: ["性别"],
+    工作经验: ["工作经验", "工作年限"],
+    最高学历: ["最高学历", "学历"],
+    所在地: ["所在地", "现居住地", "现居住城市"],
+    最近公司: ["最近公司", "公司"],
+    证件类型: ["证件类型", "证件号码类型", "身份证件类型"],
+    证件号码: ["证件号码", "身份证号", "身份证号码"],
+    "出生日期 (年龄)": ["出生日期", "出生年月", "生日"],
+    当前薪资: ["当前薪资"],
+    期望薪资: ["期望薪资"],
+    期望城市: ["期望城市", "期望工作城市"],
+    公司名称: ["公司名称", "公司", "单位名称"],
+    职位名称: ["职位名称", "职位", "职务"],
+    工作职责: ["工作职责", "工作内容", "实习内容"],
+    学校名称: ["学校名称", "学校"],
+    专业名称: ["专业名称", "专业"],
+    学历: ["学历", "最高学历"],
+    项目名称: ["项目名称", "项目"],
+    职责: ["职责", "职位", "项目角色"],
+    项目描述: ["项目描述", "项目内容"],
+    项目中职责: ["项目中职责", "本人职责", "个人职责"],
+    语言类型: ["语言类型", "外语种类", "语种"],
+    掌握程度: ["掌握程度", "熟练程度", "语言水平"],
+    奖项名称: ["奖项名称", "获奖名称", "奖惩名称"]
+  };
+
+  const MOKA_MONTH_NAMES = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
 
   const AUTO_FILL_SECTION_ORDER = [
     "基本信息",
@@ -1548,11 +1601,15 @@
       ["基本信息", /基本信息|个人信息/],
       ["教育经历", /教育经历|教育背景/],
       ["工作经历", /工作经历/],
+      ["实习经历", /实习经历/],
+      ["项目经历", /项目经验|项目经历/],
+      ["求职意向", /求职意向/],
       ["绩效考核", /近三年年度绩效考核|绩效考核/],
       ["家庭信息", /家庭及社会关系|家庭情况|家庭信息|社会关系/],
       ["证书技能", /证书信息|证书技能|资格证书/],
       ["专业资格", /专业技术资格|职业资格|职称/],
-      ["奖惩情况", /奖惩信息|奖惩情况/],
+      ["奖惩情况", /奖惩信息|奖惩情况|获奖经历/],
+      ["语言能力", /语言能力|外语能力/],
       ["自我描述", /自我评价及相关情况说明|自我评价|自我描述/],
       ["有关声明", /有关声明/]
     ];
@@ -1629,6 +1686,18 @@
       return "contenteditable";
     }
 
+    if (isMokaBirthdayControl(element)) {
+      return "date";
+    }
+
+    if (isMokaDateRangeControl(element)) {
+      return "moka-date-part";
+    }
+
+    if (isMokaCustomSelectControl(element)) {
+      return "combobox";
+    }
+
     if (element.querySelector?.('[role="combobox"]')) {
       return "combobox";
     }
@@ -1690,6 +1759,168 @@
     return /periodInput(?:Begin|End)?$/.test(dataCy) ||
       element?.classList?.contains("atsx-date-picker-period-month-label") ||
       element?.classList?.contains("atsx-date-picker-period-month");
+  }
+
+  function isMokaPage() {
+    return currentSiteAdapter?.id === "moka" || /(?:^|\.)(?:mokahr|moka)\.com$/i.test(location.hostname || "");
+  }
+
+  function getMokaFieldRoot(element) {
+    return element?.closest?.('[class*="apply-field-"]') || null;
+  }
+
+  function getMokaApplyBlock(element) {
+    return element?.closest?.('[class*="apply-block-"]') || null;
+  }
+
+  function getMokaBlockTitle(block) {
+    if (!block) {
+      return "";
+    }
+    const title = block.querySelector('[class*="blockTitle"],[class*="block-title"],h2,h3,h4,h5');
+    return normalizeText(title ? getElementText(title) : getTextWithoutControls(block).slice(0, 80), 100);
+  }
+
+  function getMokaSectionCategory(element) {
+    if (!isMokaPage()) {
+      return "";
+    }
+    const title = getMokaBlockTitle(getMokaApplyBlock(element));
+    if (/个人信息|基本信息/.test(title)) {
+      return "基本信息";
+    }
+    if (/求职意向/.test(title)) {
+      return "求职意向";
+    }
+    if (/工作经历/.test(title)) {
+      return "工作经历";
+    }
+    if (/教育背景|教育经历/.test(title)) {
+      return "教育经历";
+    }
+    if (/实习经历/.test(title)) {
+      return "实习经历";
+    }
+    if (/项目经验|项目经历/.test(title)) {
+      return "项目经历";
+    }
+    if (/语言能力|外语能力/.test(title)) {
+      return "语言能力";
+    }
+    if (/自我描述|自我评价/.test(title)) {
+      return "自我描述";
+    }
+    if (/获奖经历|奖惩情况|奖励/.test(title)) {
+      return "奖惩情况";
+    }
+    return "";
+  }
+
+  function getMokaRepeatItemIndex(element) {
+    const item = element?.closest?.('[class*="apply-fields-"]');
+    const block = getMokaApplyBlock(element);
+    if (!item || !block) {
+      return 0;
+    }
+    const items = Array.from(block.querySelectorAll('[class*="apply-fields-"]'))
+      .filter((candidate) => getMokaApplyBlock(candidate) === block);
+    const index = items.indexOf(item);
+    return index >= 0 ? index : 0;
+  }
+
+  function getMokaDateRangePart(element) {
+    const root = getMokaFieldRoot(element);
+    if (!root || !root.classList.toString().includes("date_info")) {
+      return null;
+    }
+    const inputs = Array.from(root.querySelectorAll('input:not([type="hidden"]):not([type="password"]):not([type="file"])'))
+      .filter((input) => input.type === "text");
+    const index = inputs.indexOf(element);
+    if (index < 0 || index > 3) {
+      return null;
+    }
+    return {
+      index,
+      side: index < 2 ? "start" : "end",
+      part: index % 2 === 0 ? "year" : "month"
+    };
+  }
+
+  function isMokaDateRangeControl(element) {
+    return Boolean(isMokaPage() && getMokaDateRangePart(element));
+  }
+
+  function isMokaBirthdayControl(element) {
+    const root = getMokaFieldRoot(element);
+    return Boolean(
+      isMokaPage() &&
+      root &&
+      root.classList.toString().includes("day_info") &&
+      element instanceof HTMLInputElement
+    );
+  }
+
+  function isMokaCustomSelectControl(element) {
+    if (!isMokaPage() || isMokaBirthdayControl(element) || isMokaDateRangeControl(element)) {
+      return false;
+    }
+    return Boolean(element?.closest?.('[class*="sd-Select-container"]'));
+  }
+
+  function getMokaFieldInfo(element) {
+    if (!isMokaPage()) {
+      return null;
+    }
+    const root = getMokaFieldRoot(element);
+    if (!root) {
+      return null;
+    }
+    const rangePart = getMokaDateRangePart(element);
+    const sectionKey = Object.entries(MOKA_SECTION_CATEGORIES)
+      .find(([, category]) => category === getMokaSectionCategory(element))?.[0] || "";
+    return {
+      sectionKey,
+      itemIndex: getMokaRepeatItemIndex(element),
+      rangePart: rangePart?.side || "",
+      rangeUnit: rangePart?.part || "",
+      rangeIndex: rangePart?.index ?? -1
+    };
+  }
+
+  function getMokaFieldLabel(element, info = getMokaFieldInfo(element)) {
+    if (!info) {
+      return "";
+    }
+    if (info.rangePart === "start") {
+      return "开始时间";
+    }
+    if (info.rangePart === "end") {
+      return "结束时间";
+    }
+    const root = getMokaFieldRoot(element);
+    const title = normalizeFieldLabelText(
+      root?.querySelector?.('[class*="title-"],[class*="filed-title"],[class*="field-title"]')?.textContent || ""
+    );
+    if (/证件号码/.test(title)) {
+      if (element.closest?.('[class*="sd-Select-container"]')) {
+        return "证件类型";
+      }
+      const placeholder = String(element.getAttribute?.("placeholder") || "");
+      if (/证件号码/.test(placeholder) || root?.querySelector?.('input[placeholder*="证件号码"]')) {
+        return "证件号码";
+      }
+    }
+    return normalizeFieldLabelText(title || getAdapterLabelText(element));
+  }
+
+  function getMokaDisplayValue(element) {
+    const selectRoot = element?.closest?.('[class*="sd-Select-container"]');
+    const display = selectRoot?.querySelector?.('[class*="sd-Input-display-value"]');
+    const displayText = normalizeText(display?.textContent || "", 120);
+    if (displayText) {
+      return displayText;
+    }
+    return String(element?.value || "").trim();
   }
 
   function getFeishuSectionCategory(element) {
@@ -1779,6 +2010,10 @@
   function getControlCurrentValue(element) {
     if (!element) {
       return "";
+    }
+
+    if (isMokaCustomSelectControl(element) || isMokaDateRangeControl(element)) {
+      return normalizeText(getMokaDisplayValue(element), 260);
     }
 
     if (element.getAttribute?.("role") === "combobox" || element.querySelector?.('[role="combobox"]')) {
@@ -1871,6 +2106,8 @@
     const dataCy = normalizeText(element.getAttribute("data-cy"));
     const feishuInfo = getFeishuFieldInfo(element);
     const feishuLabel = getFeishuFieldLabel(element, feishuInfo);
+    const mokaInfo = getMokaFieldInfo(element);
+    const mokaLabel = getMokaFieldLabel(element, mokaInfo);
     const rawLabel = normalizeText(
       getLabelByFor(element) ||
         getDataAttributeLabelText(element) ||
@@ -1879,8 +2116,8 @@
         getAriaLabelText(element)
     );
     const nearbyText = getNearbyText(element);
-    const label = feishuLabel || improveFieldLabel(element, rawLabel, nearbyText);
-    const section = getFeishuSectionCategory(element) || getSectionText(element);
+    const label = feishuLabel || mokaLabel || improveFieldLabel(element, rawLabel, nearbyText);
+    const section = getFeishuSectionCategory(element) || getMokaSectionCategory(element) || getSectionText(element);
     const sensitive = isSensitiveControl(element, {
       label,
       placeholder: element.getAttribute("placeholder"),
@@ -1898,6 +2135,7 @@
       fieldId: getOrCreateFieldId(element),
       dataCy,
       feishuInfo,
+      mokaInfo,
       type,
       tagName: element.tagName.toLowerCase(),
       label,
@@ -1957,6 +2195,16 @@
       .filter((element, index, array) => array.indexOf(element) === index)
       .filter((element) => !element.closest(`#${PANEL_ID}`))
       .filter(isVisible)
+      .filter((element) => {
+        if (!isMokaPage()) {
+          return true;
+        }
+        // Mokahr renders login/verification dialogs alongside the resume
+        // editor. Only controls owned by an apply-block are part of the
+        // resume form; this keeps unrelated popup controls out of the scan.
+        return Boolean(element.closest('[class*="apply-block-"]')) &&
+          !element.closest('[role="dialog"],[aria-modal="true"]');
+      })
       .filter((element) => {
         const compositeAncestor = element.parentElement?.closest?.('[role="combobox"]');
         return !(compositeAncestor && compositeAncestor !== element);
@@ -2163,6 +2411,90 @@
     return { added, missing };
   }
 
+  function getMokaProfileItemCount(sectionKey) {
+    const category = MOKA_SECTION_CATEGORIES[sectionKey] || sectionKey;
+    const aliases = MOKA_SECTION_CATEGORY_ALIASES[category] || [category];
+    const section = getCurrentProfileSections().find((candidate) => aliases.includes(candidate.category));
+    if (!Array.isArray(section?.items)) {
+      return 0;
+    }
+    const repeatIndexes = section.items
+      .map((item) => String(item.itemId || "").match(/\.items\[(\d+)\]\./)?.[1])
+      .filter((index) => index != null);
+    if (repeatIndexes.length > 0) {
+      return new Set(repeatIndexes).size;
+    }
+    return new Set(section.items.map((item) => item.subsection || item.itemId || item.label)).size;
+  }
+
+  function getMokaBlock(sectionKey) {
+    const category = MOKA_SECTION_CATEGORIES[sectionKey] || sectionKey;
+    return Array.from(document.querySelectorAll('[class*="apply-block-"]'))
+      .find((block) => getMokaSectionCategory(block) === category) || null;
+  }
+
+  function getMokaRepeatItems(block) {
+    if (!block) {
+      return [];
+    }
+    return Array.from(block.querySelectorAll('[class*="apply-fields-"]'))
+      .filter((item) => getMokaApplyBlock(item) === block);
+  }
+
+  function getMokaAddButton(block) {
+    return Array.from(block?.querySelectorAll?.('button,[role="button"]') || [])
+      .find((button) => compactText(getElementText(button)) === "添加") || null;
+  }
+
+  async function prepareMokaRepeatItems() {
+    const sectionConfigs = [
+      ["work", "工作经历"],
+      ["education", "教育经历"],
+      ["internship", "实习经历"],
+      ["project", "项目经历"],
+      ["language", "语言能力"],
+      ["awards", "奖惩情况"]
+    ];
+    const missing = [];
+    const added = [];
+
+    for (const [sectionKey, category] of sectionConfigs) {
+      const desired = getMokaProfileItemCount(sectionKey);
+      if (!desired) {
+        continue;
+      }
+      let block = getMokaBlock(sectionKey);
+      if (!block) {
+        missing.push({ section: category, desired, current: 0, reason: "页面没有对应模块" });
+        continue;
+      }
+
+      let current = getMokaRepeatItems(block).length;
+      while (current < desired) {
+        block = getMokaBlock(sectionKey);
+        const addButton = getMokaAddButton(block);
+        if (!addButton || !clickActionElement(addButton)) {
+          missing.push({ section: category, desired, current, reason: "没有可用的添加入口" });
+          break;
+        }
+        const previous = current;
+        const appeared = await waitForCondition(() => {
+          const latestBlock = getMokaBlock(sectionKey);
+          return getMokaRepeatItems(latestBlock).length > previous;
+        }, 3000);
+        block = getMokaBlock(sectionKey);
+        current = getMokaRepeatItems(block).length;
+        if (!appeared || current <= previous) {
+          missing.push({ section: category, desired, current, reason: "添加后没有出现新条目" });
+          break;
+        }
+        added.push({ section: category, index: current - 1 });
+      }
+    }
+
+    return { added, missing };
+  }
+
   async function scanForm() {
     currentSiteAdapter = detectSiteAdapter();
     const pageMode = currentSiteAdapter?.id === "feishu-jobs"
@@ -2190,7 +2522,9 @@
     const expandedEditCards = await expandEditableCardsForScan();
     const repeatPreparation = currentSiteAdapter?.id === "feishu-jobs"
       ? await prepareFeishuRepeatItems()
-      : { added: [], missing: [] };
+      : currentSiteAdapter?.id === "moka"
+        ? await prepareMokaRepeatItems()
+        : { added: [], missing: [] };
     const controls = collectVisibleControls();
 
     const fields = controls.map((element) => buildFieldMeta(element));
@@ -3524,6 +3858,9 @@
     if (/证书信息|证书类别|证书名称|发证单位|证书编号/.test(text)) {
       return "证书技能";
     }
+    if (/项目经验|项目经历|项目名称|项目描述|项目中职责/.test(text)) {
+      return "项目经历";
+    }
     if (/教育经历|学历|学校名称|学院名称|专业名称|培养方式|升学类型/.test(text)) {
       return "教育经历";
     }
@@ -4775,6 +5112,152 @@
     return FEISHU_SECTION_CATEGORIES[info.sectionKey] || "";
   }
 
+  function mokaCategoryMatches(actual, expected) {
+    if (!actual || !expected) {
+      return true;
+    }
+    const aliases = MOKA_SECTION_CATEGORY_ALIASES[expected] || [expected];
+    return aliases.includes(actual) || actual === expected;
+  }
+
+  function getMokaEntryItemIndex(entry) {
+    const match = String(entry?.itemId || "").match(/\.items\[(\d+)\]\./);
+    return match ? Number(match[1]) : 0;
+  }
+
+  function getMokaFieldAliases(fieldLabel) {
+    return Array.from(new Set([
+      fieldLabel,
+      ...(MOKA_FIELD_ALIASES[fieldLabel] || []),
+      ...(PROFILE_LABEL_ALIASES[fieldLabel] || [])
+    ].map((value) => normalizeMatchKey(value)).filter(Boolean)));
+  }
+
+  function getMokaEntryMatchScore(field, entry) {
+    const info = field?.mokaInfo;
+    if (!info) {
+      return null;
+    }
+
+    const category = MOKA_SECTION_CATEGORIES[info.sectionKey] || "";
+    if (!category || !mokaCategoryMatches(entry?.category, category)) {
+      return -9999;
+    }
+    if (info.sectionKey !== "basic" && info.sectionKey !== "intention" && getMokaEntryItemIndex(entry) !== Number(info.itemIndex || 0)) {
+      return -9999;
+    }
+
+    const fieldLabel = field?.inferredLabel || field?.label || "";
+    const fieldAliases = getMokaFieldAliases(fieldLabel);
+    const entryLabels = [entry?.label, ...(entry?.aliases || [])]
+      .map((value) => normalizeMatchKey(value))
+      .filter(Boolean);
+    return entryLabels.some((label) => fieldAliases.includes(label)) ? 230 : -9999;
+  }
+
+  function getMokaMappedValue(field, entry) {
+    const info = field?.mokaInfo;
+    if (!info || !entry) {
+      return "";
+    }
+    if (info.rangePart) {
+      const normalized = normalizeDateValue(entry.value);
+      const match = normalized.match(/^(\d{4})-(\d{2})/);
+      if (!match) {
+        return "";
+      }
+      return info.rangeUnit === "year" ? match[1] : String(Number(match[2]));
+    }
+    return String(entry.value || "").trim();
+  }
+
+  function getMokaRawProfileSections() {
+    if (!currentProfileV2 || typeof currentProfileV2 !== "object") {
+      return [];
+    }
+    const sections = [];
+    const sourceSections = currentProfileV2.sections && typeof currentProfileV2.sections === "object"
+      ? currentProfileV2.sections
+      : {};
+    for (const [key, section] of Object.entries(sourceSections)) {
+      if (section && typeof section === "object") {
+        sections.push({ key, section });
+      }
+    }
+    for (const [index, section] of (Array.isArray(currentProfileV2.customSections) ? currentProfileV2.customSections : []).entries()) {
+      if (section && typeof section === "object") {
+        sections.push({ key: section.key || "custom-" + index, section });
+      }
+    }
+    return sections;
+  }
+
+  function getMokaRawProfileSection(sectionKey) {
+    const category = MOKA_SECTION_CATEGORIES[sectionKey] || sectionKey;
+    const aliases = MOKA_SECTION_CATEGORY_ALIASES[category] || [category];
+    return getMokaRawProfileSections().find(({ key, section }) => {
+      const titleCategory = normalizeProfileCategory(section.title || "");
+      const keyCategory = normalizeProfileCategory(key);
+      return aliases.includes(titleCategory) || aliases.includes(keyCategory) ||
+        aliases.includes(section.title || "") || aliases.includes(key || "");
+    })?.section || null;
+  }
+
+  function getMokaRawProfileItem(field, section) {
+    const info = field?.mokaInfo;
+    if (!section || section.kind !== "repeat") {
+      return section;
+    }
+    return Array.isArray(section.items) ? section.items[Number(info?.itemIndex || 0)] || null : null;
+  }
+
+  function getMokaRawProfilePairs(field, section) {
+    const item = getMokaRawProfileItem(field, section);
+    if (!item) {
+      return [];
+    }
+    const pairs = [];
+    const values = item.values && typeof item.values === "object"
+      ? item.values
+      : section === item && section.values && typeof section.values === "object"
+        ? section.values
+        : {};
+    for (const [label, value] of Object.entries(values)) {
+      pairs.push({ label: String(label || ""), value: String(value == null ? "" : value).trim() });
+    }
+    for (const row of (Array.isArray(item.custom) ? item.custom : Array.isArray(section.custom) ? section.custom : [])) {
+      pairs.push({ label: String(row?.label || ""), value: String(row?.value == null ? "" : row.value).trim() });
+    }
+    return pairs;
+  }
+
+  function getMokaProfileSourceState(field) {
+    const info = field?.mokaInfo;
+    if (!info || !info.sectionKey) {
+      return null;
+    }
+    const section = getMokaRawProfileSection(info.sectionKey);
+    if (!section) {
+      return null;
+    }
+    const fieldLabel = field?.inferredLabel || field?.label || "";
+    const aliases = new Set(getMokaFieldAliases(fieldLabel));
+    if (info.rangeUnit === "year" || info.rangeUnit === "month") {
+      aliases.add(normalizeMatchKey(info.rangePart === "start" ? "开始时间" : "结束时间"));
+      aliases.add(normalizeMatchKey(info.rangePart === "start" ? "起始时间" : "截止时间"));
+      aliases.add(normalizeMatchKey(info.rangePart === "start" ? "入学时间" : "毕业时间"));
+    }
+    const pairs = getMokaRawProfilePairs(field, section);
+    const matched = pairs.find((pair) => aliases.has(normalizeMatchKey(pair.label)));
+    return {
+      section,
+      item: getMokaRawProfileItem(field, section),
+      matched: Boolean(matched),
+      hasValue: Boolean(matched?.value),
+      reason: matched?.value ? "" : "本机资料该字段为空，已跳过"
+    };
+  }
+
   function feishuCategoryMatches(actual, expected) {
     if (!actual || !expected) {
       return true;
@@ -5174,7 +5657,7 @@
   }
 
   function guessAutofillValueFieldType(field) {
-    if (field?.type === "date" || isFeishuPeriodControl(field)) {
+    if (field?.type === "date" || field?.type === "moka-date-part" || isFeishuPeriodControl(field)) {
       return "date";
     }
     const labelText = compactText([field?.inferredLabel || inferFieldLabel(field), field?.label, field?.placeholder].join(" "));
@@ -5398,15 +5881,30 @@
     const label = field?.inferredLabel || inferFieldLabel(field);
     const category = field?.inferredCategory || getFeishuFieldCategory(field) || inferMatchSection(field);
     const feishuInfo = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+    const mokaInfo = field?.mokaInfo || null;
     return {
       fieldId: field?.fieldId || "",
       dataCy: normalizeText(field?.dataCy || "", 160),
       label: normalizeText(label || "", 120),
       category: normalizeText(category || "", 80),
       module: normalizeText(field?.section || category || "", 80),
-      itemIndex: Number.isInteger(feishuInfo?.itemIndex) ? feishuInfo.itemIndex : null,
-      fieldKey: normalizeText(feishuInfo?.fieldKey || "", 80),
-      part: normalizeText(feishuInfo?.part || "", 20),
+      itemIndex: Number.isInteger(feishuInfo?.itemIndex)
+        ? feishuInfo.itemIndex
+        : Number.isInteger(mokaInfo?.itemIndex)
+          ? mokaInfo.itemIndex
+          : null,
+      fieldKey: normalizeText(feishuInfo?.fieldKey || (mokaInfo ? label : ""), 80),
+      part: normalizeText(feishuInfo?.part || mokaInfo?.rangePart || "", 20),
+      rangeUnit: normalizeText(mokaInfo?.rangeUnit || "", 20),
+      mokaInfo: mokaInfo
+        ? {
+            sectionKey: normalizeText(mokaInfo.sectionKey || "", 40),
+            itemIndex: Number.isInteger(mokaInfo.itemIndex) ? mokaInfo.itemIndex : null,
+            rangePart: normalizeText(mokaInfo.rangePart || "", 20),
+            rangeUnit: normalizeText(mokaInfo.rangeUnit || "", 20),
+            rangeIndex: Number.isInteger(mokaInfo.rangeIndex) ? mokaInfo.rangeIndex : null
+          }
+        : null,
       type: normalizeText(field?.type || "", 40),
       controlType: normalizeText(field?.type || "", 40),
       canFill: Boolean(field?.canFill),
@@ -5442,6 +5940,8 @@
   }
 
   function summarizeDeferredItem(item) {
+    const feishuInfo = item?.field?.feishuInfo;
+    const mokaInfo = item?.field?.mokaInfo;
     return {
       id: item?.id || item?.fieldId || "",
       fieldId: item?.fieldId || item?.field?.fieldId || "",
@@ -5449,10 +5949,13 @@
       fieldCategory: normalizeText(item?.fieldCategory || item?.field?.section || "", 80),
       itemIndex: Number.isInteger(item?.itemIndex)
         ? item.itemIndex
-        : Number.isInteger(item?.field?.feishuInfo?.itemIndex)
-          ? item.field.feishuInfo.itemIndex
-          : null,
-      part: normalizeText(item?.part || item?.field?.feishuInfo?.part || "", 20),
+        : Number.isInteger(feishuInfo?.itemIndex)
+          ? feishuInfo.itemIndex
+          : Number.isInteger(mokaInfo?.itemIndex)
+            ? mokaInfo.itemIndex
+            : null,
+      part: normalizeText(item?.part || feishuInfo?.part || mokaInfo?.rangePart || "", 20),
+      rangeUnit: normalizeText(mokaInfo?.rangeUnit || "", 20),
       status: item?.status || "pending",
       reasonCode: item?.reasonCode || getDeferredReasonCode(item),
       reason: normalizeText(item?.reason || "待处理", 180)
@@ -5483,7 +5986,8 @@
     const fields = Array.isArray(plan.scan?.fields) ? plan.scan.fields.map(summarizeDebugField) : [];
     const autoFillCount = candidates.filter((candidate) => candidate.shouldAutoFill).length;
     const confirmCount = candidates.filter((candidate) => !candidate.shouldAutoFill).length;
-    const ignoredCount = 0;
+    const skipped = Array.isArray(plan.skipped) ? plan.skipped.map(summarizeDeferredItem) : [];
+    const ignoredCount = skipped.length;
 
     lastAutofillDebug = {
       version: SCRIPT_VERSION,
@@ -5515,6 +6019,7 @@
       unmatched: Array.isArray(plan.unmatched) ? plan.unmatched.map(summarizeDeferredItem) : [],
       blocked: Array.isArray(plan.blocked) ? plan.blocked.map(summarizeDeferredItem) : [],
       unsupportedModules: Array.isArray(plan.unsupportedModules) ? plan.unsupportedModules.map(summarizeDeferredItem) : [],
+      skipped,
       summary: null,
       results: []
     };
@@ -5573,6 +6078,7 @@
     const allFields = Array.isArray(scan?.fields) ? scan.fields.filter(Boolean) : [];
     const visibleFields = allFields.filter((field) => field.canFill);
     const unmatched = [];
+    const skipped = [];
     const unsupportedModules = [];
     const blocked = allFields
       .filter((field) => !field.canFill)
@@ -5642,10 +6148,13 @@
           continue;
         }
 
+        const mokaScore = getMokaEntryMatchScore(field, entry);
         const feishuScore = getFeishuEntryMatchScore(field, entry, entries);
-        const score = feishuScore == null
-          ? scoreAutofillCandidate(field, entry, fieldLabel, fieldCategory)
-          : feishuScore;
+        const score = mokaScore != null
+          ? mokaScore
+          : feishuScore == null
+            ? scoreAutofillCandidate(field, entry, fieldLabel, fieldCategory)
+            : feishuScore;
         const identityScore = feishuScore != null && feishuScore >= 180
           ? getFeishuRepeatIdentityScore(field, entry, entries)
           : 0;
@@ -5662,6 +6171,19 @@
       }
 
       if (!bestEntry || bestScore < 18 || ambiguousBest) {
+        const mokaSourceState = getMokaProfileSourceState(field);
+        if (mokaSourceState) {
+          skipped.push({
+            id: "skipped_" + field.fieldId,
+            fieldId: field.fieldId,
+            field,
+            fieldLabel,
+            fieldCategory,
+            itemIndex: Number.isInteger(field?.mokaInfo?.itemIndex) ? field.mokaInfo.itemIndex : null,
+            reason: mokaSourceState.reason || "本机资料未填写，已跳过"
+          });
+          continue;
+        }
         const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
         unmatched.push({
           id: `unmatched_${field.fieldId}`,
@@ -5682,7 +6204,7 @@
         field,
         bestEntry,
         bestScore,
-        getFeishuMappedValue(field, bestEntry, entries)
+        getMokaMappedValue(field, bestEntry) || getFeishuMappedValue(field, bestEntry, entries)
       );
       if (!candidate.value) {
         unmatched.push({
@@ -5714,6 +6236,7 @@
       unmatched,
       blocked,
       unsupportedModules,
+      skipped,
       autoFillIds: new Set(candidates.filter((candidate) => candidate.shouldAutoFill).map((candidate) => candidate.id))
     };
   }
@@ -5827,9 +6350,11 @@
       if (!plan || autoFillIds.size === 0) {
         const deferred = await markDeferredPlanCandidates(plan, autoFillIds);
         const unsupportedModules = Array.isArray(plan?.unsupportedModules) ? plan.unsupportedModules : [];
-        const unsupportedDetails = unsupportedModules.map((item) => ({
+        const sourceSkipped = Array.isArray(plan?.skipped) ? plan.skipped : [];
+        const skippedItems = [...sourceSkipped, ...unsupportedModules];
+        const skippedDetails = skippedItems.map((item) => ({
           label: formatPendingItemLabel(item),
-          reason: item.reason || "模板没有对应模块，无法填写",
+          reason: item.reason || "本机资料为空或模板没有对应模块，已跳过",
           status: "skipped"
         }));
         const pendingDetails = deferred.items.map((item) => ({
@@ -5841,16 +6366,16 @@
           attempted: 0,
           filled: 0,
           failed: 0,
-          skipped: unsupportedModules.length,
-          total: deferred.count + unsupportedModules.length,
+          skipped: skippedDetails.length,
+          total: deferred.count + skippedDetails.length,
           pending: deferred.count,
-          skippedReasons: unsupportedModules,
+          skippedReasons: [...sourceSkipped, ...unsupportedModules],
           unmatched: plan?.unmatched || [],
-          details: [...pendingDetails, ...unsupportedDetails],
+          details: [...pendingDetails, ...skippedDetails],
           message: deferred.count > 0
-            ? `填写结束，仍需处理 ${deferred.count} 项。${buildPendingReasonPreview(deferred.items)}${unsupportedModules.length > 0 ? `；已跳过 ${unsupportedModules.length} 个模板缺失模块` : ""}。`
-            : unsupportedModules.length > 0
-              ? `填写完成，已跳过 ${unsupportedModules.length} 个模板缺失模块。${buildPendingReasonPreview(unsupportedModules)}。`
+            ? `填写结束，仍需处理 ${deferred.count} 项。${buildPendingReasonPreview(deferred.items)}${skippedDetails.length > 0 ? `；已跳过 ${skippedDetails.length} 项` : ""}。`
+            : skippedDetails.length > 0
+              ? `填写完成，已跳过 ${skippedDetails.length} 项。${buildPendingReasonPreview(skippedItems)}。`
               : "填写结束，没有找到可自动填写的字段。"
         };
         setProfilePanelStatus(summary.message, deferred.count > 0);
@@ -5867,16 +6392,16 @@
             itemIndex: item.itemIndex,
             reasonCode: getDeferredReasonCode(item)
           })),
-          ...unsupportedModules.map((item) => ({
-            id: item.id,
+          ...skippedDetails.map((item, index) => ({
+            id: skippedItems[index]?.id || "skipped_" + index,
             ok: false,
             note: item.reason,
             skipped: true,
             status: "skipped",
-            fieldLabel: item.fieldLabel,
-            fieldCategory: item.fieldCategory,
-            itemIndex: item.itemIndex,
-            reasonCode: "unsupported_module"
+            fieldLabel: skippedItems[index]?.fieldLabel || item.label,
+            fieldCategory: skippedItems[index]?.fieldCategory || "",
+            itemIndex: skippedItems[index]?.itemIndex ?? null,
+            reasonCode: skippedItems[index]?.id?.startsWith("repeat_") ? "unsupported_module" : "missing_profile_data"
           }))
         ]);
         return {
@@ -5988,8 +6513,12 @@
         note,
         fieldLabel: candidate.fieldLabel || field?.label || "字段",
         fieldCategory: candidate.fieldCategory || field?.section || "",
-        itemIndex: Number.isInteger(field?.feishuInfo?.itemIndex) ? field.feishuInfo.itemIndex : null,
-        part: field?.feishuInfo?.part || "",
+        itemIndex: Number.isInteger(field?.feishuInfo?.itemIndex)
+          ? field.feishuInfo.itemIndex
+          : Number.isInteger(field?.mokaInfo?.itemIndex)
+            ? field.mokaInfo.itemIndex
+            : null,
+        part: field?.feishuInfo?.part || field?.mokaInfo?.rangePart || "",
         reasonCode: ok ? "filled" : (candidate.hasConflict ? "existing_conflict" : "fill_failed")
       });
     }
@@ -5998,7 +6527,9 @@
     const failedCount = results.length - filledCount;
     const deferred = await markDeferredPlanCandidates(plan, autoFillSet);
     const unsupportedModules = Array.isArray(plan?.unsupportedModules) ? plan.unsupportedModules : [];
-    const skippedCount = unsupportedModules.length;
+    const sourceSkipped = Array.isArray(plan?.skipped) ? plan.skipped : [];
+    const allSkipped = [...sourceSkipped, ...unsupportedModules];
+    const skippedCount = allSkipped.length;
     const pendingCount = failedCount + deferred.count;
     const pendingItems = [
       ...results.filter((result) => !result.ok).map((result) => ({
@@ -6012,9 +6543,9 @@
         status: "pending"
       }))
     ];
-    const skippedItems = unsupportedModules.map((item) => ({
+    const skippedItems = allSkipped.map((item) => ({
       label: formatPendingItemLabel(item),
-      reason: item.reason || "模板没有对应模块，无法填写",
+      reason: item.reason || "本机资料为空或模板没有对应模块，已跳过",
       status: "skipped"
     }));
     const summary = {
@@ -6024,7 +6555,7 @@
       skipped: skippedCount,
       pending: pendingCount,
       total: filledCount + pendingCount + skippedCount,
-      skippedReasons: unsupportedModules,
+      skippedReasons: allSkipped,
       unmatched: plan?.unmatched || [],
       details: [...pendingItems, ...skippedItems],
       message: pendingCount > 0
@@ -6037,15 +6568,15 @@
               note: result.note
             })),
             ...deferred.items
-          ])}${skippedCount > 0 ? `；已跳过 ${skippedCount} 个模板缺失模块` : ""}。`
+          ])}${skippedCount > 0 ? `；已跳过 ${skippedCount} 项` : ""}。`
         : skippedCount > 0
-          ? `填写完成，已跳过 ${skippedCount} 个模板缺失模块。${buildPendingReasonPreview(unsupportedModules)}。`
+          ? `填写完成，已跳过 ${skippedCount} 项。${buildPendingReasonPreview(allSkipped)}。`
           : "填写结束，所有匹配项均已填写。"
     };
     const resultItems = [
       ...results,
       ...deferred.items.map((item) => ({ id: item.id, ok: false, note: item.reason, skipped: false, status: "pending", fieldLabel: item.fieldLabel, fieldCategory: item.fieldCategory, itemIndex: item.itemIndex, reasonCode: getDeferredReasonCode(item) })),
-      ...unsupportedModules.map((item) => ({ id: item.id, ok: false, note: item.reason, skipped: true, status: "skipped", fieldLabel: item.fieldLabel, fieldCategory: item.fieldCategory, itemIndex: item.itemIndex, reasonCode: "unsupported_module" }))
+      ...allSkipped.map((item) => ({ id: item.id, ok: false, note: item.reason, skipped: true, status: "skipped", fieldLabel: item.fieldLabel, fieldCategory: item.fieldCategory, itemIndex: item.itemIndex, reasonCode: item.id?.startsWith("repeat_") ? "unsupported_module" : "missing_profile_data" }))
     ];
     setProfilePanelStatus(summary.message, pendingCount > 0);
     setAutofillSummary(summary);
@@ -6060,7 +6591,7 @@
       results: resultItems,
       pending: pendingCount,
       message: summary.message,
-      skippedReasons: unsupportedModules,
+      skippedReasons: allSkipped,
       unmatched: plan?.unmatched || [],
       details: summary.details
     };
@@ -6190,6 +6721,10 @@
       return "";
     }
 
+    if (isMokaCustomSelectControl(element) || isMokaDateRangeControl(element)) {
+      return getMokaDisplayValue(element);
+    }
+
     if (element.getAttribute?.("role") === "combobox") {
       if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
         const ownValue = String(element.value || "").trim();
@@ -6254,6 +6789,10 @@
       return false;
     }
 
+    if (isMokaCustomSelectControl(element)) {
+      return valuesLookEquivalent(getMokaDisplayValue(element), expected, field, "choice");
+    }
+
     const targets = [element, resolveEditableTarget(element)].filter(Boolean);
     const seenTargets = new Set();
     for (const target of targets) {
@@ -6302,6 +6841,15 @@
   }
 
   function isControlValueEquivalent(element, actualValue, expectedValue, field, candidate) {
+    if (
+      (candidate?.writeMode === "date" || field?.type === "date") &&
+      isMokaBirthdayControl(element)
+    ) {
+      const actualMonth = normalizeDateValue(actualValue).slice(0, 7);
+      const expectedMonth = normalizeDateValue(expectedValue).slice(0, 7);
+      return Boolean(actualMonth && expectedMonth && actualMonth === expectedMonth);
+    }
+
     if (
       (candidate?.writeMode === "date" || field?.type === "date") &&
       isFeishuRangeField(field) &&
@@ -6366,6 +6914,14 @@
       return { ok: false, reason: "file upload requires manual selection" };
     }
 
+    if (type === "moka-date-part") {
+      return tryFillCustomChoiceField(originalElement, value, field);
+    }
+
+    if (type === "date" && isMokaBirthdayControl(originalElement)) {
+      return fillMokaBirthdayControl(originalElement, value);
+    }
+
     if (type === "combobox") {
       const choiceResult = await tryFillCustomChoiceField(originalElement, value, field);
       if (choiceResult.ok) {
@@ -6421,6 +6977,110 @@
     element.focus();
     setNativeValue(element, value);
     return { ok: true };
+  }
+
+  function getVisibleMokaDropdown(element) {
+    const fieldRoot = getMokaFieldRoot(element);
+    const local = Array.from(fieldRoot?.querySelectorAll?.('[class*="sd-Dropdown-dropdown"]') || [])
+      .filter(isVisible);
+    if (local.length > 0) {
+      return local[local.length - 1];
+    }
+    const global = Array.from(document.querySelectorAll('[class*="sd-Dropdown-dropdown"]')).filter(isVisible);
+    return global.length === 1 ? global[0] : null;
+  }
+
+  function getMokaCalendarHeader(popup) {
+    return popup?.querySelector?.('[class*="sd-basic-selector-year"]') || null;
+  }
+
+  function getMokaCalendarItem(popup, text) {
+    const expected = normalizeExactValue(text);
+    return Array.from(popup?.querySelectorAll?.('[class*="sd-basic-year-item"]') || [])
+      .filter(isVisible)
+      .filter((item) => !item.className.toString().includes("sd-basic-disabled"))
+      .find((item) => normalizeExactValue(getElementText(item)) === expected) || null;
+  }
+
+  function getMokaCalendarArrow(popup, direction) {
+    return popup?.querySelector?.(`[class*="icondouble${direction}"]`) || null;
+  }
+
+  async function selectMokaCalendarYear(popup, year) {
+    let header = getMokaCalendarHeader(popup);
+    if (!header) {
+      return { ok: false, reason: "出生日期年份面板未找到" };
+    }
+
+    if (/年$/.test(normalizeExactValue(getElementText(header)))) {
+      if (!clickActionElement(header)) {
+        return { ok: false, reason: "出生日期年份面板无法打开" };
+      }
+      const switched = await waitForCondition(() => {
+        header = getMokaCalendarHeader(popup);
+        return Boolean(header && /\d{4}\s*-\s*\d{4}/.test(getElementText(header)));
+      }, 1500);
+      if (!switched) {
+        return { ok: false, reason: "出生日期年份面板切换失败" };
+      }
+    }
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const item = getMokaCalendarItem(popup, String(year));
+      if (item) {
+        return clickActionElement(item)
+          ? { ok: true }
+          : { ok: false, reason: "出生日期年份选项无法点击" };
+      }
+
+      header = getMokaCalendarHeader(popup);
+      const range = getElementText(header).match(/(\d{4})\s*-\s*(\d{4})/);
+      if (!range) {
+        return { ok: false, reason: `未找到出生日期年份 ${year}` };
+      }
+      const direction = Number(year) < Number(range[1]) ? "Left" : "Right";
+      const arrow = getMokaCalendarArrow(popup, direction);
+      if (!arrow || !clickActionElement(arrow)) {
+        return { ok: false, reason: `未找到出生日期年份 ${year}` };
+      }
+      await sleep(80);
+    }
+
+    return { ok: false, reason: `未找到出生日期年份 ${year}` };
+  }
+
+  async function fillMokaBirthdayControl(element, value) {
+    const normalized = normalizeDateValue(value);
+    const match = normalized.match(/^(\d{4})-(\d{2})/);
+    if (!match) {
+      return { ok: false, reason: "出生日期资料缺少可选择的年月" };
+    }
+
+    if (!clickActionElement(element)) {
+      return { ok: false, reason: "出生日期控件无法打开" };
+    }
+    const opened = await waitForCondition(() => Boolean(getVisibleMokaDropdown(element)), 2000);
+    const popup = getVisibleMokaDropdown(element);
+    if (!opened || !popup) {
+      return { ok: false, reason: "出生日期面板未打开" };
+    }
+
+    const yearResult = await selectMokaCalendarYear(popup, match[1]);
+    if (!yearResult.ok) {
+      return yearResult;
+    }
+    const monthName = MOKA_MONTH_NAMES[Number(match[2]) - 1];
+    const monthReady = await waitForCondition(() => Boolean(getMokaCalendarItem(popup, monthName)), 1500);
+    const month = getMokaCalendarItem(popup, monthName);
+    if (!monthReady || !month || !clickActionElement(month)) {
+      return { ok: false, reason: `未找到出生日期月份 ${match[2]}` };
+    }
+
+    const selected = await waitForCondition(() => {
+      const actual = normalizeDateValue(getControlVerificationValue(element));
+      return actual.startsWith(`${match[1]}-${match[2]}`);
+    }, 1500);
+    return selected ? { ok: true } : { ok: false, reason: "出生日期选择后回读不一致" };
   }
 
   function getVisibleFeishuDatePicker(target = null, excluded = new Set()) {
@@ -6957,6 +7617,8 @@
       ".rc-select-item-option",
       ".ant-cascader-menu-item",
       ".ant-picker-cell",
+      '[class*="sd-Menu-content-item"]',
+      '[class*="sd-basic-year-item"]',
       '[class*="option"]',
       '[class*="Option"]',
       '[class*="select-item"]',
