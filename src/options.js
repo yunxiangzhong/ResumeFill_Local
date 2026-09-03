@@ -1,5 +1,8 @@
+import { parseResumeFile } from "./resume-importer.js";
+
 const fields = {
   saveProfileButton: document.getElementById("saveProfile"),
+  parseResumeButton: document.getElementById("parseResume"),
   profileSectionEditor: document.getElementById("profileSectionEditor"),
   profileSelect: document.getElementById("profileSelect"),
   newProfileButton: document.getElementById("newProfile"),
@@ -9,6 +12,16 @@ const fields = {
   profileNav: document.getElementById("profileNav"),
   profileTips: document.getElementById("profileTips"),
   profileFileInput: document.getElementById("profileFileInput"),
+  resumeFileInput: document.getElementById("resumeFileInput"),
+  resumeImportDialog: document.getElementById("resumeImportDialog"),
+  resumeImportStatus: document.getElementById("resumeImportStatus"),
+  resumeImportSummary: document.getElementById("resumeImportSummary"),
+  resumeImportPreview: document.getElementById("resumeImportPreview"),
+  resumeImportUnclassified: document.getElementById("resumeImportUnclassified"),
+  resumeImportUnclassifiedText: document.getElementById("resumeImportUnclassifiedText"),
+  confirmResumeImportButton: document.getElementById("confirmResumeImport"),
+  cancelResumeImportButton: document.getElementById("cancelResumeImport"),
+  closeResumeImportButton: document.getElementById("closeResumeImport"),
   profileFeedback: document.getElementById("profileFeedback"),
   toast: document.getElementById("toast"),
   status: document.getElementById("status")
@@ -219,6 +232,7 @@ const STRUCTURED_RESUME_SECTIONS = [
       "研究方向",
       "毕业论文",
       "成绩",
+      "GPA",
       "班级排名",
       "专业排名",
       "学历证书编号",
@@ -431,8 +445,10 @@ let profileLoadedId = "";
 let profileLoadedRevision = 0;
 let profileSaveFeedbackTimer = 0;
 let toastTimer = 0;
+let resumeImportDraft = null;
 
 fields.saveProfileButton.addEventListener("click", saveProfile);
+fields.parseResumeButton?.addEventListener("click", () => fields.resumeFileInput?.click());
 document.getElementById("exportProfile").addEventListener("click", exportProfile);
 document.getElementById("importProfile").addEventListener("click", () => fields.profileFileInput.click());
 document.getElementById("resetProfile").addEventListener("click", resetProfile);
@@ -442,6 +458,10 @@ fields.newProfileButton?.addEventListener("click", () => void createNewProfile()
 fields.renameProfileButton?.addEventListener("click", () => void renameActiveProfile());
 fields.deleteProfileButton?.addEventListener("click", () => void removeActiveProfile());
 fields.profileFileInput.addEventListener("change", importProfileFromFile);
+fields.resumeFileInput?.addEventListener("change", importResumeFromFile);
+fields.confirmResumeImportButton?.addEventListener("click", confirmResumeImport);
+fields.cancelResumeImportButton?.addEventListener("click", closeResumeImportDialog);
+fields.closeResumeImportButton?.addEventListener("click", closeResumeImportDialog);
 fields.profileSectionEditor.addEventListener("input", handleProfileEditorInput);
 fields.profileSectionEditor.addEventListener("focusin", handleProfileSectionFocus);
 fields.profileSectionEditor.addEventListener("click", handleStructuredProfileClick);
@@ -712,6 +732,227 @@ async function importProfileFromFile() {
   } finally {
     fields.profileFileInput.value = "";
   }
+}
+
+async function importResumeFromFile() {
+  const file = fields.resumeFileInput?.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  openResumeImportDialog();
+  setResumeImportStatus("正在准备本地解析…");
+  fields.confirmResumeImportButton.disabled = true;
+  try {
+    resumeImportDraft = await parseResumeFile(file, (message) => setResumeImportStatus(message));
+    renderResumeImportPreview(resumeImportDraft);
+    fields.confirmResumeImportButton.disabled = false;
+    setResumeImportStatus("解析完成。请核对字段和待整理内容，再确认新建简历。");
+  } catch (error) {
+    resumeImportDraft = null;
+    fields.resumeImportPreview.replaceChildren();
+    fields.resumeImportSummary.hidden = true;
+    fields.resumeImportUnclassified.hidden = true;
+    setResumeImportStatus(`解析失败：${error.message}`, "error");
+  } finally {
+    fields.resumeFileInput.value = "";
+  }
+}
+
+function openResumeImportDialog() {
+  if (!fields.resumeImportDialog) {
+    return;
+  }
+  fields.resumeImportPreview.replaceChildren();
+  fields.resumeImportSummary.hidden = true;
+  fields.resumeImportUnclassified.hidden = true;
+  fields.confirmResumeImportButton.disabled = true;
+  if (!fields.resumeImportDialog.open) {
+    fields.resumeImportDialog.showModal();
+  }
+}
+
+function closeResumeImportDialog() {
+  resumeImportDraft = null;
+  fields.resumeImportDialog?.close();
+  fields.resumeImportPreview?.replaceChildren();
+  if (fields.resumeImportSummary) fields.resumeImportSummary.hidden = true;
+  if (fields.resumeImportUnclassified) fields.resumeImportUnclassified.hidden = true;
+  if (fields.resumeImportStatus) {
+    fields.resumeImportStatus.className = "hint";
+    fields.resumeImportStatus.textContent = "文件只在本机浏览器内读取，确认前不会写入资料库。";
+  }
+}
+
+function setResumeImportStatus(message, state = "") {
+  if (!fields.resumeImportStatus) return;
+  fields.resumeImportStatus.textContent = message;
+  fields.resumeImportStatus.className = state === "error" ? "hint error" : "hint";
+}
+
+function renderResumeImportPreview(draft) {
+  const profile = draft.profileV2;
+  const sections = Object.values(profile.sections || {}).filter(sectionHasImportData);
+  fields.resumeImportPreview.replaceChildren();
+
+  const nameLabel = document.createElement("label");
+  nameLabel.className = "resume-import-name";
+  nameLabel.textContent = "新简历名称";
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.value = String(draft.fileName || "简历").replace(/\.[^.]+$/, "") || "导入简历";
+  nameInput.dataset.importProfileName = "true";
+  nameLabel.append(nameInput);
+  fields.resumeImportPreview.append(nameLabel);
+
+  for (const section of sections) {
+    const sectionEl = document.createElement("section");
+    sectionEl.className = "resume-import-section";
+    const heading = document.createElement("h3");
+    heading.textContent = section.title;
+    sectionEl.append(heading);
+    if (section.kind === "repeat") {
+      section.items.forEach((entry, itemIndex) => {
+        const itemEl = document.createElement("fieldset");
+        itemEl.className = "resume-import-item";
+        const legend = document.createElement("legend");
+        legend.textContent = `${section.title} ${itemIndex + 1}`;
+        itemEl.append(legend);
+        const titleInput = document.createElement("input");
+        titleInput.type = "text";
+        titleInput.value = entry.title || `${section.title} ${itemIndex + 1}`;
+        titleInput.dataset.importTitle = "true";
+        titleInput.dataset.importSection = section.key;
+        titleInput.dataset.importItem = String(itemIndex);
+        titleInput.setAttribute("aria-label", "经历标题");
+        itemEl.append(createImportField("经历标题", titleInput));
+        for (const [label, value] of Object.entries(entry.values || {})) {
+          itemEl.append(createImportField(label, createImportControl(label, value, section.key, itemIndex)));
+        }
+        sectionEl.append(itemEl);
+      });
+    } else {
+      for (const [label, value] of Object.entries(section.values || {})) {
+        sectionEl.append(createImportField(label, createImportControl(label, value, section.key, "")));
+      }
+    }
+    fields.resumeImportPreview.append(sectionEl);
+  }
+
+  if (!sections.length) {
+    const empty = document.createElement("p");
+    empty.className = "field-help";
+    empty.textContent = "暂时没有可靠匹配的字段，请查看待整理内容并手动补充。";
+    fields.resumeImportPreview.append(empty);
+  }
+
+  const summary = fields.resumeImportSummary;
+  summary.replaceChildren();
+  summary.hidden = false;
+  summary.append(summaryText(`${formatName(draft.format)} · ${draft.fileName}`));
+  summary.append(summaryText(`识别 ${draft.stats.valueCount} 个字段、${draft.stats.itemCount} 段经历`));
+  summary.append(summaryText(`整体置信度 ${Math.round(draft.confidence * 100)}%`));
+
+  const unclassified = Array.isArray(draft.unclassified) ? draft.unclassified : [];
+  if (unclassified.length) {
+    fields.resumeImportUnclassified.hidden = false;
+    fields.resumeImportUnclassifiedText.textContent = unclassified
+      .map((entry) => `[${entry.source || "原文"}] ${entry.text}`)
+      .join("\n");
+  }
+}
+
+function createImportField(label, control) {
+  const wrapper = document.createElement("label");
+  wrapper.className = "resume-import-field";
+  const caption = document.createElement("span");
+  caption.textContent = label;
+  wrapper.append(caption, control);
+  return wrapper;
+}
+
+function createImportControl(label, value, sectionKey, itemIndex) {
+  const longText = String(value || "").length > 100 || /内容|职责|成果|描述|课程|技能|简介/.test(label);
+  const control = document.createElement(longText ? "textarea" : "input");
+  if (control.tagName === "INPUT") control.type = "text";
+  control.value = String(value || "");
+  control.dataset.importSection = sectionKey;
+  control.dataset.importItem = String(itemIndex);
+  control.dataset.importLabel = label;
+  if (control.tagName === "TEXTAREA") control.rows = Math.min(8, Math.max(3, String(value || "").split("\n").length + 1));
+  return control;
+}
+
+function sectionHasImportData(section) {
+  if (section?.kind === "repeat") return (section.items || []).some((item) => Object.keys(item.values || {}).length);
+  return Object.keys(section?.values || {}).length > 0;
+}
+
+function summaryText(text) {
+  const span = document.createElement("span");
+  span.textContent = text;
+  return span;
+}
+
+function formatName(format) {
+  return { pdf: "PDF", docx: "DOCX", md: "Markdown", markdown: "Markdown" }[format] || String(format || "文件").toUpperCase();
+}
+
+async function confirmResumeImport() {
+  if (!resumeImportDraft) return;
+  const button = fields.confirmResumeImportButton;
+  button.disabled = true;
+  setResumeImportStatus("正在创建新简历…");
+  try {
+    const profileV2 = collectResumeImportPreview(resumeImportDraft);
+    const name = fields.resumeImportPreview.querySelector("[data-import-profile-name]")?.value.trim() || "导入简历";
+    const settings = await sendRuntimeMessage({
+      type: "OJAF_CREATE_PROFILE",
+      payload: { name, profileV2, expectedRevision: profileLoadedRevision }
+    });
+    renderProfileManager(settings);
+    renderProfileSectionEditor(settings.profileV2);
+    profileEditorBaseline = cloneProfileData(settings.profileV2);
+    setProfileSaved(`已从 ${resumeImportDraft.fileName} 新建简历并保存到本机。`);
+    setStatus(`已新建 ${getActiveProfileName(settings)}。`);
+    showToast("已新建导入简历。");
+    closeResumeImportDialog();
+  } catch (error) {
+    button.disabled = false;
+    setResumeImportStatus(`新建失败：${error.message}`, "error");
+  }
+}
+
+function collectResumeImportPreview(draft) {
+  const profileV2 = cloneProfileData(draft.profileV2);
+  fields.resumeImportPreview.querySelectorAll("[data-import-label]").forEach((control) => {
+    const section = profileV2.sections?.[control.dataset.importSection];
+    const itemIndex = control.dataset.importItem;
+    if (!section) return;
+    const value = String(control.value || "").trim();
+    if (section.kind === "repeat") {
+      const item = section.items?.[Number(itemIndex)];
+      if (!item) return;
+      if (value) item.values[control.dataset.importLabel] = value;
+      else delete item.values[control.dataset.importLabel];
+    } else if (value) {
+      section.values[control.dataset.importLabel] = value;
+    } else {
+      delete section.values[control.dataset.importLabel];
+    }
+  });
+  fields.resumeImportPreview.querySelectorAll("[data-import-title]").forEach((control) => {
+    const item = profileV2.sections?.[control.dataset.importSection]?.items?.[Number(control.dataset.importItem)];
+    if (item) item.title = String(control.value || "").trim();
+  });
+  profileV2.importMeta = {
+    sourceFile: draft.fileName,
+    sourceFormat: draft.format,
+    importedAt: new Date().toISOString(),
+    confidence: draft.confidence,
+    unclassified: Array.isArray(draft.unclassified) ? draft.unclassified : []
+  };
+  return profileV2;
 }
 
 function resetProfile() {

@@ -66,6 +66,7 @@
           <div id="profileSectionEditor" class="profile-section-editor"></div>
           <div class="actions profile-actions">
             <button id="saveProfile" type="button">保存资料</button>
+            <button id="parseResume" class="secondary" type="button">从简历文件解析</button>
             <button id="exportProfile" class="secondary" type="button">导出资料备份</button>
             <button id="importProfile" class="secondary" type="button">导入资料备份</button>
             <button id="resetProfile" class="ghost" type="button">恢复空白模板</button>
@@ -73,6 +74,7 @@
           </div>
           <p id="profileFeedback" class="profile-feedback" aria-live="polite">资料加载后，编辑任意字段会在这里提示是否需要保存。</p>
           <input id="profileFileInput" type="file" accept="application/json,.json" hidden />
+          <input id="resumeFileInput" type="file" accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.md,.markdown,text/markdown" hidden />
         </section>
 
         <aside class="resume-tips card">
@@ -102,6 +104,31 @@
     </main>
     <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
-    <script src="./options.js"></script>
+    <dialog id="resumeImportDialog" class="resume-import-dialog" aria-labelledby="resumeImportTitle">
+      <form method="dialog" class="resume-import-shell">
+        <div class="resume-import-head">
+          <div>
+            <p class="eyebrow">本地解析</p>
+            <h2 id="resumeImportTitle">从简历文件新建资料</h2>
+            <p id="resumeImportStatus" class="hint">文件只在本机浏览器内读取，确认前不会写入资料库。</p>
+          </div>
+          <button id="closeResumeImport" class="ghost" type="button" aria-label="关闭预览">关闭</button>
+        </div>
+        <div id="resumeImportSummary" class="resume-import-summary" hidden></div>
+        <div id="resumeImportPreview" class="resume-import-preview"></div>
+        <details id="resumeImportUnclassified" class="resume-import-unclassified" hidden>
+          <summary>待整理内容</summary>
+          <p class="field-help">这些文字没有可靠的栏目归属，确认保存时会作为导入记录保留，不会自动填写到招聘网站。</p>
+          <pre id="resumeImportUnclassifiedText"></pre>
+        </details>
+        <div class="actions resume-import-actions">
+          <button id="confirmResumeImport" type="button" disabled>确认并新建简历</button>
+          <button id="cancelResumeImport" class="secondary" type="button">取消</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./vendor/mammoth.browser.min.js"></script>
+    <script type="module" src="./options.js"></script>
   </body>
 </html>

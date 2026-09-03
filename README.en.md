@@ -15,12 +15,15 @@ ResumeFill Local is a privacy-first browser extension for filling Chinese job ap
 ## Features
 
 - Multiple local resume profiles with create, switch, rename and delete actions.
+- Local resume import: choose a text PDF, DOCX or Markdown file, review the mapped fields, then create a new profile.
 - Structured fields for contact details, education, class/major rank, work, projects, awards, certificates and custom data.
 - Local matching and filling for text controls, native selects, radio buttons, checkboxes, dates and common component controls.
 - Green marks for filled fields and orange marks for fields that need review or manual copying.
 - JSON backup and restore for the complete local profile library, including custom and unknown fields.
 
-GPA fields are excluded from automatic matching and filling. Enter them manually on the recruiting site when required; rank values are copied only when present in the profile and are never calculated or invented.
+Education records accept imported GPA values. When the source has no GPA, the field stays blank; values are never calculated or invented. Rank values are copied only when present in the profile.
+
+Resume parsing runs entirely in the browser with bundled PDF.js and Mammoth resources. Scanned PDFs, legacy `.doc` files and image-only text require conversion before import; verify contacts, dates and experience ownership in the preview.
 
 ## Installation
 

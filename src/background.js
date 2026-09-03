@@ -178,7 +178,7 @@ async function createProfile(payload) {
     name,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    profileV2: clone(EMPTY_PROFILE)
+    profileV2: payload.profileV2 ? normalizeProfile(payload.profileV2) : clone(EMPTY_PROFILE)
   };
   store.profiles = [...store.profiles, profile];
   store.activeId = profile.id;

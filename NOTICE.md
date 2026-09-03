@@ -14,3 +14,8 @@ ResumeFill Local 基于以下公开项目的固定版本改造：
 - 保留页面扫描、字段匹配、控件填写和结果标记能力，并将匹配固定为本地规则。
 
 本仓库中的新增和修改内容按 `LICENSE` 中的 MIT License 发布。
+
+本地简历解析功能随扩展打包以下第三方浏览器资源：
+
+- Mozilla PDF.js 4.10.x，Apache License 2.0，许可证见 `src/vendor/PDFJS-LICENSE.txt`。
+- Mammoth.js 1.12.x，BSD 2-Clause License，许可证见 `src/vendor/MAMMOTH-LICENSE.txt`。
