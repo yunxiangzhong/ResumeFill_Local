@@ -36,7 +36,10 @@ async function syncRuntimeState() {
     }
     if (state.autofillSummary) {
       const summary = state.autofillSummary;
-      setStatus(`上次填写：已填写 ${summary.filled || 0} 项，待处理 ${pendingCount(summary)} 项。`);
+      const pending = pendingCount(summary);
+      setStatus(summary.message || (pending > 0
+        ? `上次填写结束，仍需处理 ${pending} 项。`
+        : `上次填写结束，已填写 ${summary.filled || 0} 项。`));
     }
   } catch {
     if (els.startAutofillBtn) {
@@ -56,11 +59,16 @@ async function startAutofill() {
     const response = await sendToActiveTab({ type: "OJAF_START_AUTOFILL" });
     const data = response?.data || {};
     if (data.ok && data.filled != null) {
-      setStatus(`已填写 ${data.filled || 0} 项，待处理 ${pendingCount(data)} 项。请复核后手动提交。`);
+      const pending = pendingCount(data);
+      setStatus(data.message || (pending > 0
+        ? `填写结束，仍需处理 ${pending} 项。请复核后手动提交。`
+        : `填写结束，已填写 ${data.filled || 0} 项。请复核后手动提交。`));
     } else if (data.reason === "busy") {
       setStatus("当前已有处理任务，请稍候。", true);
     } else if (data.reason === "no candidates") {
-      setStatus("本页没有可自动填写项，橙色字段需要你手动复核或填写。", true);
+      setStatus(data.message || "填写结束，仍需处理页面上的字段。", true);
+    } else if (data.reason === "view page" || data.reason === "login page") {
+      setStatus(data.message || "请先进入飞书简历编辑页并登录后再开始填写。", true);
     } else if (data.reason) {
       setStatus(`处理未完成：${data.reason}`, true);
     } else {

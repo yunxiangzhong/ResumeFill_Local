@@ -1,5 +1,5 @@
 (() => {
-  const SCRIPT_VERSION = "0.2.2-local";
+  const SCRIPT_VERSION = "0.2.4-local";
   const PANEL_ID = "ojaf-profile-panel";
   const FLOAT_ID = "ojaf-floating-status";
   const STYLE_ID = "ojaf-autofill-style-v2";
@@ -49,7 +49,11 @@
     '[role="textbox"]',
     '[role="combobox"]',
     '[role="radio"]',
-    '[role="checkbox"]'
+    '[role="checkbox"]',
+    '[data-cy$="Input"]',
+    '[data-cy$="periodInput"]',
+    '[data-cy$="periodInputBegin"]',
+    '[data-cy$="periodInputEnd"]'
   ].join(",");
 
   const SITE_ADAPTERS = [
@@ -206,6 +210,43 @@
       editLabels: ["编辑", "修改"]
     }
   ];
+
+  const FEISHU_SECTION_CATEGORIES = {
+    basicInfoSection: "基本信息",
+    education: "教育经历",
+    internship: "实习经历",
+    career: "工作经历",
+    work: "作品",
+    project: "项目经历",
+    language: "语言能力",
+    award: "奖惩情况",
+    sns: "其他信息",
+    customFieldModule: "自我描述"
+  };
+
+  const FEISHU_FIELD_ALIASES = {
+    name: ["姓名"],
+    school: ["学校名称", "学校"],
+    degree: ["学历"],
+    fieldOfStudy: ["专业", "专业名称"],
+    company: ["公司名称", "公司", "单位名称"],
+    title: ["职位名称", "职位", "职务", "项目角色", "角色"],
+    role: ["项目角色", "职位名称", "职位", "角色"],
+    desc: ["描述", "工作内容", "工作成果", "项目内容", "本人职责", "项目成果"],
+    link: ["项目链接", "项目地址"],
+    language: ["语言", "外语种类", "语言类型"],
+    proficiency: ["精通程度", "掌握程度", "熟练程度"],
+    awardName: ["获奖名称", "奖项名称", "奖惩名称", "奖励名称"],
+    awardTime: ["获奖时间", "奖项时间", "奖惩时间", "奖励时间"],
+    awardOrg: ["颁发单位", "获奖单位", "奖励单位"],
+    nationality: ["国籍", "国家/地区", "国籍（国家或地区）"],
+    snsType: ["社交平台", "平台"],
+    snsLink: ["URL / ID", "链接", "账号"]
+  };
+
+  const FEISHU_SECTION_CATEGORY_ALIASES = {
+    "语言能力": ["语言能力", "外语能力"]
+  };
 
   const AUTO_FILL_SECTION_ORDER = [
     "基本信息",
@@ -471,6 +512,17 @@
     return new Promise((resolve) => {
       setTimeout(resolve, ms);
     });
+  }
+
+  async function waitForCondition(predicate, timeoutMs = 2500, intervalMs = 60) {
+    const deadline = Date.now() + timeoutMs;
+    do {
+      if (predicate()) {
+        return true;
+      }
+      await sleep(intervalMs);
+    } while (Date.now() < deadline);
+    return Boolean(predicate());
   }
 
   function getPageKey() {
@@ -1573,6 +1625,14 @@
       return "contenteditable";
     }
 
+    if (element.querySelector?.('[role="combobox"]')) {
+      return "combobox";
+    }
+
+    if (isFeishuPeriodControl(element)) {
+      return "date";
+    }
+
     const role = element.getAttribute("role");
     if (role === "combobox") {
       return "combobox";
@@ -1589,6 +1649,76 @@
     }
 
     return role || "text";
+  }
+
+  function parseFeishuDataCy(dataCy) {
+    const text = String(dataCy || "");
+    const match = text.match(/^(education|internship|career|project|works|language|award|sns)\[(\d+)\]\.([^.]+?)(?:Input)?(Begin|End)?$/i);
+    if (!match) {
+      return null;
+    }
+    return {
+      sectionKey: match[1].toLowerCase(),
+      itemIndex: Number(match[2]),
+      fieldKey: match[3],
+      part: match[4] ? match[4].toLowerCase() : ""
+    };
+  }
+
+  function getFeishuFieldInfo(elementOrField) {
+    const dataCy = typeof elementOrField === "object"
+      ? elementOrField?.dataCy || elementOrField?.getAttribute?.("data-cy")
+      : "";
+    return parseFeishuDataCy(dataCy);
+  }
+
+  function isFeishuPeriodControl(element) {
+    const dataCy = element?.getAttribute?.("data-cy") || "";
+    return /periodInput(?:Begin|End)?$/.test(dataCy) ||
+      element?.classList?.contains("atsx-date-picker-period-month-label") ||
+      element?.classList?.contains("atsx-date-picker-period-month");
+  }
+
+  function getFeishuSectionCategory(element) {
+    const inferredSection = getSectionText(element);
+    if (/自我评价|自我描述|自我介绍/.test(inferredSection)) {
+      return "自我描述";
+    }
+    let current = element?.closest?.("[class]") || null;
+    for (let depth = 0; current && depth < 8; depth += 1, current = current.parentElement) {
+      const className = String(current.className || "");
+      const match = className.match(/resumeEditForm-([A-Za-z0-9_-]+)/);
+      if (match) {
+        const sectionKey = Object.keys(FEISHU_SECTION_CATEGORIES)
+          .find((key) => match[1] === key || match[1] === `${key}s` || match[1].startsWith(`${key}-`) || match[1].startsWith(`${key}_`));
+        if (sectionKey) {
+          return FEISHU_SECTION_CATEGORIES[sectionKey];
+        }
+      }
+    }
+    return "";
+  }
+
+  function getFeishuFieldLabel(element, info = getFeishuFieldInfo(element)) {
+    if (!info) {
+      return "";
+    }
+    if (info.part === "begin") {
+      return "开始时间";
+    }
+    if (info.part === "end") {
+      return "结束时间";
+    }
+    if (info.fieldKey === "period") {
+      return "起止时间";
+    }
+    if (info.sectionKey === "project" && info.fieldKey === "name") {
+      return "项目名称";
+    }
+    if (info.sectionKey === "project" && info.fieldKey === "role") {
+      return "项目角色";
+    }
+    return FEISHU_FIELD_ALIASES[info.fieldKey]?.[0] || "";
   }
 
   function isSensitiveControl(element, field = {}) {
@@ -1635,8 +1765,15 @@
       return "";
     }
 
-    if (element.getAttribute?.("role") === "combobox") {
+    if (element.getAttribute?.("role") === "combobox" || element.querySelector?.('[role="combobox"]')) {
       return normalizeText(getControlVerificationValue(element), 260);
+    }
+
+    if (isFeishuPeriodControl(element)) {
+      const periodInputs = Array.from(element.querySelectorAll?.('input:not([type="hidden"]):not([type="password"]):not([type="file"])') || []);
+      if (periodInputs.length > 0) {
+        return periodInputs.map((input) => String(input.value || "").trim()).join("\n");
+      }
     }
 
     if (element instanceof HTMLSelectElement) {
@@ -1659,6 +1796,11 @@
 
     if (element.isContentEditable) {
       return normalizeText(element.textContent || "", 260);
+    }
+
+    const nestedEditable = element.querySelector?.('input:not([type="hidden"]):not([type="password"]):not([type="file"]),textarea,[contenteditable="true"]');
+    if (nestedEditable) {
+      return getControlCurrentValue(nestedEditable);
     }
 
     const role = element.getAttribute?.("role");
@@ -1709,6 +1851,9 @@
   function buildFieldMeta(element) {
     const adapter = getActiveSiteAdapter();
     const type = getControlType(element);
+    const dataCy = normalizeText(element.getAttribute("data-cy"));
+    const feishuInfo = getFeishuFieldInfo(element);
+    const feishuLabel = getFeishuFieldLabel(element, feishuInfo);
     const rawLabel = normalizeText(
       getLabelByFor(element) ||
         getDataAttributeLabelText(element) ||
@@ -1717,7 +1862,8 @@
         getAriaLabelText(element)
     );
     const nearbyText = getNearbyText(element);
-    const label = improveFieldLabel(element, rawLabel, nearbyText);
+    const label = feishuLabel || improveFieldLabel(element, rawLabel, nearbyText);
+    const section = getFeishuSectionCategory(element) || getSectionText(element);
     const sensitive = isSensitiveControl(element, {
       label,
       placeholder: element.getAttribute("placeholder"),
@@ -1726,13 +1872,15 @@
       nearbyText,
       section: getSectionText(element)
     });
-    const gpaDisabled = isGpaControl(element, [label, nearbyText, getSectionText(element)].join(" "));
+    const gpaDisabled = isGpaControl(element, [label, nearbyText, section].join(" "));
     const canFill = !element.disabled && type !== "file" && !sensitive && !gpaDisabled;
     const currentValue = sensitive ? "" : getControlCurrentValue(element);
     const groupText = getRepeatGroupLabelText(element);
 
     return {
       fieldId: getOrCreateFieldId(element),
+      dataCy,
+      feishuInfo,
       type,
       tagName: element.tagName.toLowerCase(),
       label,
@@ -1747,7 +1895,7 @@
       canFill,
       sensitive,
       gpaDisabled,
-      section: getSectionText(element),
+      section,
       nearbyText,
       groupText,
       options: getOptions(element),
@@ -1795,6 +1943,10 @@
       .filter((element) => {
         const compositeAncestor = element.parentElement?.closest?.('[role="combobox"]');
         return !(compositeAncestor && compositeAncestor !== element);
+      })
+      .filter((element) => {
+        const feishuFieldAncestor = element.parentElement?.closest?.('[data-cy$="Input"]');
+        return !(feishuFieldAncestor && feishuFieldAncestor !== element);
       })
       .filter((element) => {
         if (!(element instanceof HTMLInputElement) || element.type !== "radio" || !element.name) {
@@ -1895,9 +2047,115 @@
     return expanded;
   }
 
+  function getProfileItemCount(category) {
+    const sourceSections = currentProfileV2?.sections && typeof currentProfileV2.sections === "object"
+      ? Object.values(currentProfileV2.sections)
+      : [];
+    const aliases = FEISHU_SECTION_CATEGORY_ALIASES[category] || [category];
+    const source = sourceSections.find((section) => {
+      const titleCategory = normalizeProfileCategory(section?.title || "");
+      const keyCategory = FEISHU_SECTION_CATEGORIES[String(section?.key || "").toLowerCase()] || "";
+      return aliases.includes(titleCategory) || aliases.includes(keyCategory);
+    });
+    return Array.isArray(source?.items) ? source.items.length : 0;
+  }
+
+  async function prepareFeishuRepeatItems() {
+    const sectionConfigs = [
+      ["education", "教育经历"],
+      ["internship", "实习经历"],
+      ["career", "工作经历"],
+      ["project", "项目经历"],
+      ["award", "奖惩情况"],
+      ["language", "语言能力"]
+    ];
+    const missing = [];
+    const added = [];
+
+    for (const [sectionKey, category] of sectionConfigs) {
+      const desired = getProfileItemCount(category);
+      if (!desired) {
+        continue;
+      }
+      const getRoots = () => Array.from(document.querySelectorAll(`[class*="resumeEditForm-${sectionKey}"]`))
+        .filter((node) => Array.from(node.classList || []).some((className) => (
+          className === `resumeEditForm-${sectionKey}` ||
+          className === `resumeEditForm-${sectionKey}s` ||
+          className.startsWith(`resumeEditForm-${sectionKey}-`) ||
+          className.startsWith(`resumeEditForm-${sectionKey}_`) ||
+          className.startsWith(`resumeEditForm-${sectionKey}s-`) ||
+          className.startsWith(`resumeEditForm-${sectionKey}s_`)
+        )));
+      const countItems = (root) => root
+        ? root.querySelectorAll(":scope > .createFormSection-right .resumeEditForm-item, .resumeEditForm-item").length
+        : 0;
+      const getRoot = () => getRoots()
+        .sort((left, right) => {
+          const leftScore = countItems(left) + (left.querySelector(".formOperate-addBtn,.createFormSection-addBtn") ? 1 : 0);
+          const rightScore = countItems(right) + (right.querySelector(".formOperate-addBtn,.createFormSection-addBtn") ? 1 : 0);
+          return rightScore - leftScore;
+        })[0] || null;
+      if (!getRoot()) {
+        missing.push({ section: category, desired, current: 0, reason: "页面没有对应模块" });
+        continue;
+      }
+      let current = countItems(getRoot());
+      while (current < desired) {
+        const root = getRoot();
+        if (!root) {
+          missing.push({ section: category, desired, current, reason: "添加后模块被页面重绘，无法继续定位" });
+          break;
+        }
+        const addButton = root.querySelector(".formOperate-addBtn,.createFormSection-addBtn");
+        if (!addButton || !clickActionElement(addButton)) {
+          missing.push({ section: category, desired, current, reason: "没有可用的添加入口" });
+          break;
+        }
+        const previous = current;
+        const appeared = await waitForCondition(() => {
+          const latestRoot = getRoot();
+          return countItems(latestRoot) > previous;
+        });
+        current = countItems(getRoot());
+        if (!appeared || current <= previous) {
+          missing.push({ section: category, desired, current, reason: "添加后没有出现新条目" });
+          break;
+        }
+        added.push({ section: category, index: current - 1 });
+      }
+    }
+
+    return { added, missing };
+  }
+
   async function scanForm() {
     currentSiteAdapter = detectSiteAdapter();
+    const pageMode = currentSiteAdapter?.id === "feishu-jobs"
+      ? (/\/(?:campus\/)?login(?:\/|$)/i.test(location.pathname) ? "login" : /\/campus\/resume\/view\/?$/.test(location.pathname) ? "view" : "edit")
+      : "edit";
+    if (pageMode !== "edit") {
+      const editAction = pageMode === "view"
+        ? Array.from(document.querySelectorAll("a,button,[role='button']")).find((element) => {
+          const text = compactText(getElementText(element));
+            return /^(编辑|修改|完善)$/.test(text) || /\/campus\/resume\/edit(?:$|[?#])/.test(element.getAttribute("href") || "");
+          })
+        : null;
+      return {
+        url: location.href,
+        hostname: location.hostname,
+        title: document.title,
+        siteAdapter: currentSiteAdapter ? { id: currentSiteAdapter.id, name: currentSiteAdapter.name, confidence: currentSiteAdapter.confidence || 0 } : null,
+        scannedAt: new Date().toISOString(),
+        pageMode,
+        editLink: editAction?.href || editAction?.getAttribute("data-href") || "",
+        expandedEditCards: 0,
+        fields: []
+      };
+    }
     const expandedEditCards = await expandEditableCardsForScan();
+    const repeatPreparation = currentSiteAdapter?.id === "feishu-jobs"
+      ? await prepareFeishuRepeatItems()
+      : { added: [], missing: [] };
     const controls = collectVisibleControls();
 
     const fields = controls.map((element) => buildFieldMeta(element));
@@ -1915,7 +2173,9 @@
           }
         : null,
       scannedAt: new Date().toISOString(),
+      pageMode,
       expandedEditCards,
+      repeatPreparation,
       fields
     };
   }
@@ -2475,7 +2735,13 @@
       skipped,
       pending: Number(summary?.pending ?? skipped + failed),
       total: Number(summary?.total || 0),
-      message: normalizeText(summary?.message || "", 160)
+      message: normalizeText(summary?.message || "", 160),
+      skippedReasons: Array.isArray(summary?.skippedReasons)
+        ? summary.skippedReasons.map((item) => ({ ...item }))
+        : [],
+      unmatched: Array.isArray(summary?.unmatched)
+        ? summary.unmatched.map((item) => ({ ...item }))
+        : []
     };
     renderFloatingStatus();
   }
@@ -4411,6 +4677,201 @@
     return fieldIndex === entryIndex ? 18 : -14;
   }
 
+  function getFeishuFieldCategory(field) {
+    const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+    if (!info) {
+      if (field?.siteAdapterId !== "feishu-jobs") {
+        return "";
+      }
+      const section = normalizeText(field?.section || "", 80);
+      return Object.values(FEISHU_SECTION_CATEGORIES).includes(section) ? section : "";
+    }
+    if (info.sectionKey === "works") {
+      return "作品";
+    }
+    return FEISHU_SECTION_CATEGORIES[info.sectionKey] || "";
+  }
+
+  function feishuCategoryMatches(actual, expected) {
+    if (!actual || !expected) {
+      return true;
+    }
+    const aliases = FEISHU_SECTION_CATEGORY_ALIASES[expected] || [expected];
+    return aliases.includes(actual) || actual === expected;
+  }
+
+  function getFeishuSocialRecords(entries) {
+    const records = [];
+    const grouped = new Map();
+    for (const entry of entries || []) {
+      const label = normalizeMatchKey(entry?.label || "");
+      const value = String(entry?.value || "").trim();
+      if (!label || !value) {
+        continue;
+      }
+      let platform = "";
+      if (/github/i.test(label)) {
+        platform = "GitHub";
+      } else if (/gitlab/i.test(label)) {
+        platform = "GitLab";
+      } else if (/微信|wechat/i.test(label)) {
+        platform = "微信";
+      } else if (/qq/i.test(label)) {
+        platform = "QQ";
+      } else if (/个人主页|主页|website|网站/i.test(label)) {
+        platform = "个人主页";
+      }
+      if (platform) {
+        records.push({ platformEntry: entry, linkEntry: entry, platform });
+        continue;
+      }
+      if (/社交平台|平台/.test(label)) {
+        const key = entry?.subsection || "default";
+        const group = grouped.get(key) || {};
+        group.platformEntry = entry;
+        group.platform = normalizeSocialPlatform(value);
+        grouped.set(key, group);
+      } else if (/urlid|链接|账号/.test(label)) {
+        const key = entry?.subsection || "default";
+        const group = grouped.get(key) || {};
+        group.linkEntry = entry;
+        grouped.set(key, group);
+      }
+    }
+    for (const group of grouped.values()) {
+      if (group.platform && (group.platformEntry || group.linkEntry)) {
+        records.push({
+          platformEntry: group.platformEntry || group.linkEntry,
+          linkEntry: group.linkEntry || group.platformEntry,
+          platform: group.platform
+        });
+      }
+    }
+    return records;
+  }
+
+  function normalizeSocialPlatform(value) {
+    const text = normalizeMatchKey(value || "");
+    if (/github/i.test(text)) {
+      return "GitHub";
+    }
+    if (/gitlab/i.test(text)) {
+      return "GitLab";
+    }
+    if (/微信|wechat/i.test(text)) {
+      return "微信";
+    }
+    if (/qq/i.test(text)) {
+      return "QQ";
+    }
+    if (/个人主页|主页|website|网站/i.test(text)) {
+      return "个人主页";
+    }
+    return "";
+  }
+
+  function getFeishuEntryMatchScore(field, entry, entries) {
+    const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+    if (!info) {
+      const category = getFeishuFieldCategory(field);
+      if (!category) {
+        // Once the Feishu adapter owns a field, an unknown module must stay
+        // unmatched instead of falling through to broad ATS heuristics.
+        return field?.siteAdapterId === "feishu-jobs" ? -9999 : null;
+      }
+      if (!feishuCategoryMatches(entry?.category, category)) {
+        return -9999;
+      }
+      const fieldLabel = normalizeMatchKey(field?.label || inferFieldLabel(field));
+      const fieldAliases = [field?.label, ...(PROFILE_LABEL_ALIASES[field?.label] || [])]
+        .map((value) => normalizeMatchKey(value))
+        .filter(Boolean);
+      const entryLabels = [entry?.label, ...(entry?.aliases || [])]
+        .map((value) => normalizeMatchKey(value))
+        .filter(Boolean);
+      return entryLabels.some((label) => fieldAliases.includes(label) || label === fieldLabel) ? 180 : -9999;
+    }
+    if (info.sectionKey === "works") {
+      return -9999;
+    }
+
+    if (info.sectionKey === "sns") {
+      const record = getFeishuSocialRecords(entries)[info.itemIndex];
+      const expectedEntry = info.fieldKey === "snsType" ? record?.platformEntry : record?.linkEntry;
+      return expectedEntry === entry ? 180 : -9999;
+    }
+
+    const category = FEISHU_SECTION_CATEGORIES[info.sectionKey];
+    if (category && !feishuCategoryMatches(entry?.category, category)) {
+      return -9999;
+    }
+    if (info.sectionKey && info.itemIndex >= 0 && getEntryOccurrenceIndex(entry) !== info.itemIndex + 1) {
+      return -9999;
+    }
+
+    const aliases = [...(FEISHU_FIELD_ALIASES[info.fieldKey] || [])];
+    if (info.fieldKey === "period" && !info.part) {
+      aliases.push("开始时间", "结束时间");
+    }
+    if (info.sectionKey === "project" && info.fieldKey === "name") {
+      aliases.push("项目名称");
+    }
+    if (info.sectionKey === "project" && info.fieldKey === "role") {
+      aliases.push("项目角色");
+    }
+    const entryLabels = [entry?.label, ...(entry?.aliases || [])]
+      .map((value) => normalizeMatchKey(value))
+      .filter(Boolean);
+    if (info.part === "begin") {
+      aliases.push("开始时间");
+    } else if (info.part === "end") {
+      aliases.push("结束时间");
+    }
+    const normalizedAliases = aliases.map((value) => normalizeMatchKey(value));
+    return entryLabels.some((label) => normalizedAliases.includes(label)) ? 180 : -9999;
+  }
+
+  function getFeishuMappedValue(field, entry, entries) {
+    const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+    if (!info || !entry) {
+      return "";
+    }
+    if (info.sectionKey === "sns") {
+      const record = getFeishuSocialRecords(entries)[info.itemIndex];
+      const expectedEntry = info.fieldKey === "snsType" ? record?.platformEntry : record?.linkEntry;
+      if (!record || expectedEntry !== entry) {
+        return "";
+      }
+      return info.fieldKey === "snsType" ? record.platform : record.linkEntry?.value || "";
+    }
+    if (info.fieldKey === "desc" && ["project", "internship"].includes(info.sectionKey)) {
+      const category = FEISHU_SECTION_CATEGORIES[info.sectionKey];
+      const subsection = entry.subsection;
+      const includedLabels = info.sectionKey === "project"
+        ? new Set(["项目内容", "本人职责", "项目成果"])
+        : new Set(["工作内容", "实习内容", "工作成果", "实习成果"]);
+      const values = entries
+        .filter((item) => item.category === category && item.subsection === subsection && includedLabels.has(item.label))
+        .map((item) => String(item.value || "").trim())
+        .filter(Boolean);
+      if (values.length > 0) {
+        return values.join("\n");
+      }
+    }
+    if (info.fieldKey === "period" && !info.part) {
+      const category = FEISHU_SECTION_CATEGORIES[info.sectionKey];
+      const related = entries.filter((item) =>
+        feishuCategoryMatches(item.category, category) && item.subsection === entry.subsection
+      );
+      const start = related.find((item) => /开始时间|起始时间|入学时间/.test(item.label))?.value || "";
+      const end = related.find((item) => /结束时间|截止时间|毕业时间/.test(item.label))?.value || "";
+      if (start || end) {
+        return [start, end].filter((part) => String(part || "").trim()).join("\n");
+      }
+    }
+    return String(entry.value || "").trim();
+  }
+
   function buildCandidateLabels(fieldLabel, fieldCategory) {
     const labels = new Set();
     const normalized = normalizeText(fieldLabel, 120);
@@ -4573,6 +5034,9 @@
   }
 
   function guessAutofillValueFieldType(field) {
+    if (field?.type === "date" || isFeishuPeriodControl(field)) {
+      return "date";
+    }
     const labelText = compactText([field?.inferredLabel || inferFieldLabel(field), field?.label, field?.placeholder].join(" "));
     const optionText = getFieldOptionLabelsText(field, 160);
     const contextText = compactText([field?.nearbyText, field?.section, field?.groupText, optionText].join(" "));
@@ -4613,10 +5077,10 @@
     return field.hasCurrentValue ? 84 : 55;
   }
 
-  function createAutofillCandidate(field, entry, score) {
+  function createAutofillCandidate(field, entry, score, mappedValue = "") {
     const fieldLabel = field?.inferredLabel || inferFieldLabel(field);
     const fieldCategory = field?.inferredCategory || inferMatchSection(field);
-    const value = resolveEntryValueForField(field, entry, fieldLabel, fieldCategory);
+    const value = mappedValue || resolveEntryValueForField(field, entry, fieldLabel, fieldCategory);
     const confidence = score >= 40 ? Math.max(0, Math.min(0.99, 0.45 + score / 100)) : Math.max(0, score / 120);
     const text = compactText([fieldLabel, fieldCategory, field.nearbyText, field.placeholder, field.name, field.id].join(" "));
     const writeMode = guessAutofillValueFieldType(field);
@@ -4696,6 +5160,24 @@
     return normalizeText(String(value), maxLength);
   }
 
+  function buildPendingReasonPreview(items = []) {
+    return items
+      .slice()
+      .sort((left, right) => {
+        const leftPriority = /模块|添加|不可自动/.test(left?.reason || "") ? 0 : 1;
+        const rightPriority = /模块|添加|不可自动/.test(right?.reason || "") ? 0 : 1;
+        return leftPriority - rightPriority;
+      })
+      .map((item) => {
+        const label = item?.fieldLabel || item?.field?.label || item?.id || "字段";
+        const reason = item?.reason || item?.note || "需要手动复核";
+        return `${label}：${reason}`;
+      })
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("；");
+  }
+
   function normalizeComparableValue(value) {
     const text = normalizeText(value, 120);
     if (!text) {
@@ -4727,6 +5209,9 @@
     }
 
     if (writeMode === "date" || field?.type === "date") {
+      if (isFeishuRangeField(field)) {
+        return feishuDateRangesEquivalent(left, right);
+      }
       return leftVariants.some((leftVariant) => rightVariants.some((rightVariant) => (
         valuesExactlyEquivalent(normalizeDateValue(leftVariant), normalizeDateValue(rightVariant))
       )));
@@ -4735,6 +5220,23 @@
     const normalizedLeft = normalizeComparableValue(left);
     const normalizedRight = normalizeComparableValue(right);
     return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+  }
+
+  function isFeishuRangeField(field) {
+    const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+    return Boolean(info?.fieldKey === "period" && !info.part);
+  }
+
+  function feishuDateRangesEquivalent(left, right) {
+    const leftParts = splitFeishuDateRangeValue(left)
+      .map((part) => isFeishuCurrentDateValue(part) ? "至今" : normalizeDateValue(part))
+      .filter(Boolean);
+    const rightParts = splitFeishuDateRangeValue(right)
+      .map((part) => isFeishuCurrentDateValue(part) ? "至今" : normalizeDateValue(part))
+      .filter(Boolean);
+    return leftParts.length > 0 && leftParts.length === rightParts.length && leftParts.every((part, index) => (
+      valuesExactlyEquivalent(part, rightParts[index])
+    ));
   }
 
   function splitControlValueVariants(value) {
@@ -4748,12 +5250,19 @@
 
   function summarizeDebugField(field) {
     const label = field?.inferredLabel || inferFieldLabel(field);
-    const category = field?.inferredCategory || inferMatchSection(field);
+    const category = field?.inferredCategory || getFeishuFieldCategory(field) || inferMatchSection(field);
+    const feishuInfo = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
     return {
       fieldId: field?.fieldId || "",
+      dataCy: normalizeText(field?.dataCy || "", 160),
       label: normalizeText(label || "", 120),
       category: normalizeText(category || "", 80),
+      module: normalizeText(field?.section || category || "", 80),
+      itemIndex: Number.isInteger(feishuInfo?.itemIndex) ? feishuInfo.itemIndex : null,
+      fieldKey: normalizeText(feishuInfo?.fieldKey || "", 80),
+      part: normalizeText(feishuInfo?.part || "", 20),
       type: normalizeText(field?.type || "", 40),
+      controlType: normalizeText(field?.type || "", 40),
       canFill: Boolean(field?.canFill),
       sensitive: Boolean(field?.sensitive),
       gpaDisabled: Boolean(field?.gpaDisabled),
@@ -4786,10 +5295,21 @@
     };
   }
 
+  function summarizeDeferredItem(item) {
+    return {
+      id: item?.id || item?.fieldId || "",
+      fieldId: item?.fieldId || item?.field?.fieldId || "",
+      fieldLabel: normalizeText(item?.fieldLabel || item?.field?.label || "", 120),
+      fieldCategory: normalizeText(item?.fieldCategory || item?.field?.section || "", 80),
+      reason: normalizeText(item?.reason || "待处理", 180)
+    };
+  }
+
   function summarizeDebugResult(result) {
     return {
       id: result?.id || "",
       ok: Boolean(result?.ok),
+      skipped: Boolean(result?.skipped),
       note: normalizeText(result?.note || "", 180)
     };
   }
@@ -4818,15 +5338,21 @@
         fieldCount: fields.length,
         expandedEditCards: Number(plan.scan?.expandedEditCards || 0),
         siteAdapter: plan.scan?.siteAdapter || null,
+        pageMode: plan.scan?.pageMode || "edit",
+        repeatPreparation: plan.scan?.repeatPreparation || { added: [], missing: [] },
         fields
       },
       counts: {
         candidates: candidates.length,
         autoFill: autoFillCount,
         needsConfirm: confirmCount,
-        ignored: ignoredCount
+        ignored: ignoredCount,
+        unmatched: Array.isArray(plan.unmatched) ? plan.unmatched.length : 0,
+        blocked: Array.isArray(plan.blocked) ? plan.blocked.length : 0
       },
       candidates,
+      unmatched: Array.isArray(plan.unmatched) ? plan.unmatched.map(summarizeDeferredItem) : [],
+      blocked: Array.isArray(plan.blocked) ? plan.blocked.map(summarizeDeferredItem) : [],
       summary: null,
       results: []
     };
@@ -4855,7 +5381,11 @@
       skipped: Number(summary?.skipped || 0),
       pending: Number(summary?.pending ?? Number(summary?.failed || 0) + Number(summary?.skipped || 0)),
       total: Number(summary?.total || 0),
-      message: normalizeText(summary?.message || "", 160)
+      message: normalizeText(summary?.message || "", 160),
+      skippedReasons: Array.isArray(summary?.skippedReasons)
+        ? summary.skippedReasons.map(summarizeDeferredItem)
+        : [],
+      unmatched: Array.isArray(summary?.unmatched) ? summary.unmatched.map(summarizeDeferredItem) : []
     };
     lastAutofillDebug.results = Array.isArray(results) ? results.map(summarizeDebugResult) : [];
     lastAutofillDebug.finishedAt = new Date().toISOString();
@@ -4877,12 +5407,44 @@
 
   function buildAutofillPlan(scan) {
     const entries = getCurrentProfileEntries();
-    const visibleFields = Array.isArray(scan?.fields) ? scan.fields.filter((field) => field && field.canFill) : [];
+    const allFields = Array.isArray(scan?.fields) ? scan.fields.filter(Boolean) : [];
+    const visibleFields = allFields.filter((field) => field.canFill);
+    const unmatched = [];
+    const blocked = allFields
+      .filter((field) => !field.canFill)
+      .map((field) => ({
+        id: `blocked_${field.fieldId}`,
+        fieldId: field.fieldId,
+        field,
+        fieldLabel: inferFieldLabel(field),
+        fieldCategory: getFeishuFieldCategory(field) || inferMatchSection(field),
+        reason: field.sensitive
+          ? "敏感信息或平台保护字段不可自动填写"
+          : /手机|手机号|电话|邮箱/.test(field.label || "") && (field.disabled || field.readOnly)
+            ? "联系方式由平台管理，不可编辑"
+          : field.gpaDisabled
+            ? "成绩排名字段按资料保护规则跳过"
+            : field.type === "file"
+              ? "附件不上传，需要手动选择"
+              : field.readOnly
+                ? "字段只读，需要手动处理"
+              : "当前控件暂不支持自动填写"
+      }));
+    for (const missing of scan?.repeatPreparation?.missing || []) {
+      blocked.push({
+        id: `repeat_${missing.section || "unknown"}`,
+        fieldId: "",
+        field: null,
+        fieldLabel: missing.section || "重复经历模块",
+        fieldCategory: missing.section || "",
+        reason: missing.reason || "经历条目无法自动添加"
+      });
+    }
     const fieldCounters = new Map();
     const fieldTotals = new Map();
     const enrichedFields = visibleFields.map((field) => {
       const fieldLabel = inferFieldLabel(field);
-      const fieldCategory = inferMatchSection(field);
+      const fieldCategory = getFeishuFieldCategory(field) || inferMatchSection(field);
       const occurrenceKey = `${fieldCategory || "未分类"}|${normalizeMatchKey(fieldLabel) || field.fieldId}`;
       fieldTotals.set(occurrenceKey, (fieldTotals.get(occurrenceKey) || 0) + 1);
       return {
@@ -4896,7 +5458,7 @@
 
     for (const field of enrichedFields) {
       const fieldLabel = field.inferredLabel || inferFieldLabel(field);
-      const fieldCategory = field.inferredCategory || inferMatchSection(field);
+      const fieldCategory = field.inferredCategory || getFeishuFieldCategory(field) || inferMatchSection(field);
       const nextOccurrenceIndex = (fieldCounters.get(field.occurrenceKey) || 0) + 1;
       fieldCounters.set(field.occurrenceKey, nextOccurrenceIndex);
       field.fieldOccurrenceIndex = nextOccurrenceIndex;
@@ -4909,7 +5471,10 @@
           continue;
         }
 
-        const score = scoreAutofillCandidate(field, entry, fieldLabel, fieldCategory);
+        const feishuScore = getFeishuEntryMatchScore(field, entry, entries);
+        const score = feishuScore == null
+          ? scoreAutofillCandidate(field, entry, fieldLabel, fieldCategory)
+          : feishuScore;
         if (score > bestScore) {
           bestScore = score;
           bestEntry = entry;
@@ -4917,11 +5482,35 @@
       }
 
       if (!bestEntry || bestScore < 18) {
+        const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+        unmatched.push({
+          id: `unmatched_${field.fieldId}`,
+          fieldId: field.fieldId,
+          field,
+          fieldLabel,
+          fieldCategory,
+          reason: info?.sectionKey === "works"
+            ? "作品模块按用户选择跳过"
+            : "未匹配到本机简历资料"
+        });
         continue;
       }
 
-      const candidate = createAutofillCandidate(field, bestEntry, bestScore);
+      const candidate = createAutofillCandidate(
+        field,
+        bestEntry,
+        bestScore,
+        getFeishuMappedValue(field, bestEntry, entries)
+      );
       if (!candidate.value) {
+        unmatched.push({
+          id: `unmatched_${field.fieldId}`,
+          fieldId: field.fieldId,
+          field,
+          fieldLabel,
+          fieldCategory,
+          reason: "本机资料没有可填写内容"
+        });
         continue;
       }
       candidates.push(candidate);
@@ -4940,6 +5529,8 @@
       scan,
       entries,
       candidates,
+      unmatched,
+      blocked,
       autoFillIds: new Set(candidates.filter((candidate) => candidate.shouldAutoFill).map((candidate) => candidate.id))
     };
   }
@@ -4972,6 +5563,32 @@
       setAutofillProgress("扫描当前页面", 24, "本地扫描页面字段并展开可编辑区域");
       setProfilePanelStatus("正在本地扫描当前页面并准备自动填写...");
       const baseScan = await scanForm();
+      if (baseScan.pageMode === "login") {
+        const reason = "请先登录飞书招聘后再开始填写。";
+        updateAutofillDebugPlan({
+          mappingSource: "本地规则",
+          page: baseScan,
+          scan: baseScan,
+          candidates: [],
+          unmatched: [],
+          blocked: []
+        });
+        setProfilePanelStatus(reason, true);
+        return { ok: false, reason: "login page", message: reason };
+      }
+      if (baseScan.pageMode === "view") {
+        const reason = "当前是简历查看页，请先点击页面中的“编辑”进入编辑页。";
+        updateAutofillDebugPlan({
+          mappingSource: "本地规则",
+          page: baseScan,
+          scan: baseScan,
+          candidates: [],
+          unmatched: [],
+          blocked: []
+        });
+        setProfilePanelStatus(reason, true);
+        return { ok: false, reason: "view page", message: reason, editLink: baseScan.editLink || "" };
+      }
       setAutofillProgress("整理表单字段", 42, `本地已发现 ${baseScan.fields.length} 个可见字段`);
       const scan = baseScan;
       const localPlan = buildAutofillPlan(scan);
@@ -5023,21 +5640,32 @@
         : new Set(Array.isArray(plan?.autoFillIds) ? plan.autoFillIds : []);
 
       if (!plan || autoFillIds.size === 0) {
-        setProfilePanelStatus("本页没有自动填写项，橙色字段需要手动处理。可在扩展设置页查看本机资料。", true);
-        const skippedCount = await markDeferredPlanCandidates(plan, autoFillIds);
+        const deferred = await markDeferredPlanCandidates(plan, autoFillIds);
         const summary = {
           attempted: 0,
           filled: 0,
           failed: 0,
-          skipped: skippedCount || plan?.candidates?.length || 0,
-          total: plan?.candidates?.length || 0,
-          message: "没有找到可自动填写的字段，橙色标记需要手动处理。"
+          skipped: deferred.count,
+          total: deferred.count,
+          pending: deferred.count,
+          skippedReasons: deferred.items,
+          unmatched: plan?.unmatched || [],
+          message: deferred.count > 0
+            ? `填写结束，仍需处理 ${deferred.count} 项。${buildPendingReasonPreview(deferred.items)}。`
+            : "填写结束，没有找到可自动填写的字段。"
         };
+        setProfilePanelStatus(summary.message, deferred.count > 0);
         setAutofillSummary(summary);
-        updateAutofillDebugResults(summary, []);
+        updateAutofillDebugResults(summary, deferred.items.map((item) => ({
+          id: item.id,
+          ok: false,
+          note: item.reason,
+          skipped: true
+        })));
         return {
           ok: false,
-          reason: "no candidates"
+          reason: "no candidates",
+          ...summary
         };
       }
 
@@ -5053,7 +5681,11 @@
         filled: fillResult.filled || 0,
         failed: fillResult.failed || 0,
         skipped: fillResult.skipped || 0,
-        total: fillResult.total || 0
+        pending: (fillResult.failed || 0) + (fillResult.skipped || 0),
+        total: fillResult.total || 0,
+        message: fillResult.message || "",
+        skippedReasons: fillResult.skippedReasons || [],
+        unmatched: fillResult.unmatched || []
       };
     } catch (error) {
       setProfilePanelStatus(`一键填写失败：${error.message}`, true);
@@ -5139,52 +5771,80 @@
 
     const filledCount = results.filter((result) => result.ok).length;
     const failedCount = results.length - filledCount;
-    const skippedCount = await markDeferredPlanCandidates(plan, autoFillSet);
+    const deferred = await markDeferredPlanCandidates(plan, autoFillSet);
+    const skippedCount = deferred.count;
+    const pendingCount = failedCount + skippedCount;
     const summary = {
       attempted: results.length,
       filled: filledCount,
       failed: failedCount,
       skipped: skippedCount,
-      pending: failedCount + skippedCount,
-      total: plan?.candidates?.length || results.length,
-      message: `页面已标记：绿色为已填写，橙色为待处理。`
+      pending: pendingCount,
+      total: autoFillCandidates.length + skippedCount,
+      skippedReasons: deferred.items,
+      unmatched: plan?.unmatched || [],
+      message: pendingCount > 0
+        ? `填写结束，仍需处理 ${pendingCount} 项。${buildPendingReasonPreview([
+            ...results.filter((result) => !result.ok).map((result) => ({ fieldLabel: result.id, note: result.note })),
+            ...deferred.items
+          ])}。`
+        : "填写结束，所有匹配项均已填写。"
     };
-    setProfilePanelStatus(`已自动填写 ${filledCount} 项，待处理 ${summary.pending} 项。`);
+    const resultItems = [
+      ...results,
+      ...deferred.items.map((item) => ({ id: item.id, ok: false, note: item.reason, skipped: true }))
+    ];
+    setProfilePanelStatus(summary.message, pendingCount > 0);
     setAutofillSummary(summary);
-    updateAutofillDebugResults(summary, results);
+    updateAutofillDebugResults(summary, resultItems);
     return {
       ok: true,
       attempted: results.length,
       filled: filledCount,
       failed: failedCount,
       skipped: skippedCount,
-      total: plan?.candidates?.length || results.length,
-      results
+      total: summary.total,
+      results: resultItems,
+      pending: pendingCount,
+      message: summary.message,
+      skippedReasons: deferred.items,
+      unmatched: plan?.unmatched || []
     };
   }
 
   async function markDeferredPlanCandidates(plan, autoFillIds) {
     if (!plan || !Array.isArray(plan.candidates)) {
-      return 0;
+      return { count: 0, items: [] };
     }
 
     const autoFillSet = autoFillIds instanceof Set ? autoFillIds : new Set(autoFillIds || []);
-    let count = 0;
-    for (const candidate of plan.candidates) {
-      if (autoFillSet.has(candidate.id)) {
-        continue;
+    const deferredItems = [
+      ...plan.candidates
+        .filter((candidate) => !autoFillSet.has(candidate.id))
+        .map((candidate) => ({
+          id: candidate.id,
+          fieldId: candidate.fieldId,
+          field: candidate.field,
+          fieldLabel: candidate.fieldLabel,
+          fieldCategory: candidate.fieldCategory,
+          reason: candidate.warning || candidate.reason || "需要手动复核"
+        })),
+      ...(Array.isArray(plan.unmatched) ? plan.unmatched : []),
+      ...(Array.isArray(plan.blocked) ? plan.blocked : [])
+    ];
+    const marked = [];
+    for (const item of deferredItems) {
+      const element = item.field ? findFieldElement(item.field) : null;
+      const reason = item.reason || "需要手动复核";
+      if (element) {
+        markElement(element, "uncertain", `待处理: ${item.fieldLabel || item.sourceLabel || item.id}（${reason}）`);
       }
-      const element = findFieldElement(candidate.field);
-      if (!element) {
-        continue;
-      }
-      markElement(element, "uncertain", `待处理: ${candidate.fieldLabel || candidate.sourceLabel || candidate.id}`);
-      count += 1;
-      if (count % 12 === 0) {
+      marked.push({ ...item, reason });
+      if (marked.length % 12 === 0) {
         await sleep(0);
       }
     }
-    return count;
+    return { count: marked.length, items: marked };
   }
 
   async function fillElementSmart(element, value, field, candidate) {
@@ -5263,6 +5923,18 @@
       );
     }
 
+    const nestedCombobox = element.querySelector?.('[role="combobox"]');
+    if (nestedCombobox) {
+      return getControlVerificationValue(nestedCombobox);
+    }
+
+    if (isFeishuPeriodControl(element)) {
+      const periodInputs = Array.from(element.querySelectorAll?.('input:not([type="hidden"]):not([type="password"]):not([type="file"])') || []);
+      if (periodInputs.length > 0) {
+        return periodInputs.map((input) => String(input.value || "").trim()).join("\n");
+      }
+    }
+
     const target = resolveEditableTarget(element) || element;
     if (target instanceof HTMLSelectElement) {
       const option = target.options[target.selectedIndex];
@@ -5334,6 +6006,14 @@
   }
 
   function isControlValueEquivalent(element, actualValue, expectedValue, field, candidate) {
+    if (
+      (candidate?.writeMode === "date" || field?.type === "date") &&
+      isFeishuRangeField(field) &&
+      isFeishuPeriodControl(element)
+    ) {
+      return feishuDateRangesEquivalent(actualValue, expectedValue);
+    }
+
     const target = resolveEditableTarget(element) || element;
     const expected = expectedValue == null ? "" : String(expectedValue);
     if (target instanceof HTMLInputElement && target.type === "checkbox") {
@@ -5395,7 +6075,11 @@
       if (choiceResult.ok) {
         return choiceResult;
       }
-      return { ok: false, reason: "未确认下拉选项，需要手动选择" };
+      return { ok: false, reason: choiceResult.reason || "未确认下拉选项，需要手动选择" };
+    }
+
+    if (candidate?.writeMode === "date" && isFeishuPeriodControl(originalElement)) {
+      return fillFeishuPeriodControl(originalElement, value, field);
     }
 
     const editableTarget = resolveEditableTarget(originalElement);
@@ -5440,6 +6124,132 @@
 
     element.focus();
     setNativeValue(element, value);
+    return { ok: true };
+  }
+
+  function getVisibleFeishuDatePicker() {
+    return Array.from(document.querySelectorAll(".atsx-date-picker-dropdown:not(.atsx-date-picker-dropdown-hidden)"))
+      .reverse()
+      .find((popup) => isVisible(popup)) || null;
+  }
+
+  function getFeishuDatePartNode(root, part, value) {
+    const expected = String(value || "").replace(/^0+(?=\d)/, "");
+    const nodes = Array.from(root?.querySelectorAll?.(".atsx-date-picker-period-month-panel-list-item") || [])
+      .filter(isVisible);
+    return nodes.find((node) => {
+      const text = normalizeExactValue(getElementText(node));
+      if (part === "year") {
+        return text === String(value) || text.includes(String(value));
+      }
+      const match = text.match(/\d{1,2}/);
+      return Boolean(match && String(Number(match[0])) === expected);
+    }) || null;
+  }
+
+  async function fillFeishuPeriodControl(element, value, field) {
+    const info = field?.feishuInfo || parseFeishuDataCy(field?.dataCy);
+    const rawParts = splitFeishuDateRangeValue(value);
+    const isRangeControl = info?.fieldKey === "period" && !info.part;
+    const parts = isRangeControl ? rawParts : [String(value || "")];
+    if (parts.length < (isRangeControl ? 2 : 1)) {
+      return { ok: false, reason: "日期资料缺少可选择的起止月份" };
+    }
+    const normalizedParts = parts.map((part) => isFeishuCurrentDateValue(part) ? "至今" : normalizeDateValue(part));
+    if (normalizedParts.some((part) => part !== "至今" && !/^\d{4}-\d{2}$/.test(part))) {
+      return { ok: false, reason: "日期资料缺少可选择的年月" };
+    }
+
+    for (const part of normalizedParts) {
+      const selected = part === "至今"
+        ? await selectFeishuCurrentDateValue(element)
+        : await selectFeishuDateValue(element, part);
+      if (!selected.ok) {
+        return selected;
+      }
+    }
+
+    const expected = isRangeControl ? normalizedParts.join("\n") : normalizedParts[0];
+    const selected = await waitForCondition(() => {
+      const actual = normalizeDateRangeForComparison(getControlVerificationValue(element));
+      return valuesExactlyEquivalent(actual, expected);
+    });
+    return selected ? { ok: true } : { ok: false, reason: "日期选择后回读不一致" };
+  }
+
+  function splitFeishuDateRangeValue(value) {
+    const text = String(value == null ? "" : value).trim();
+    if (!text) {
+      return [];
+    }
+    if (isFeishuCurrentDateValue(text)) {
+      return ["至今"];
+    }
+    const explicitParts = text.split(/\n+|\s*(?:至(?!今)|到|—|–|~|～)\s*/).map((part) => part.trim()).filter(Boolean);
+    if (explicitParts.length > 1) {
+      return explicitParts.slice(0, 2);
+    }
+    const matches = text.match(/\d{4}[./-]\d{1,2}/g) || [];
+    return matches.length > 1 ? matches.slice(0, 2) : explicitParts;
+  }
+
+  function isFeishuCurrentDateValue(value) {
+    return /^(至今|现在|当前)$/i.test(normalizeExactValue(value));
+  }
+
+  function normalizeDateRangeForComparison(value) {
+    const parts = splitFeishuDateRangeValue(value)
+      .map((part) => isFeishuCurrentDateValue(part) ? "至今" : normalizeDateValue(part))
+      .filter(Boolean);
+    return parts.join("\n");
+  }
+
+  function findFeishuCurrentDateOption(scope) {
+    const candidates = Array.from(scope?.querySelectorAll?.(
+      'button,[role="option"],[role="checkbox"],label,[class*="option"],[class*="checkbox"],[class*="toggle"]'
+    ) || []).filter(isVisible);
+    return candidates.find((candidate) => isFeishuCurrentDateValue(getElementText(candidate))) || null;
+  }
+
+  async function selectFeishuCurrentDateValue(element) {
+    if (!clickActionElement(element)) {
+      return { ok: false, reason: "日期控件无法打开" };
+    }
+    const opened = await waitForCondition(() => Boolean(getVisibleFeishuDatePicker()), 2500);
+    const popup = getVisibleFeishuDatePicker();
+    const option = (opened && findFeishuCurrentDateOption(popup)) || findFeishuCurrentDateOption(element);
+    if (!option) {
+      return { ok: false, reason: "日期控件不支持“至今”，需要手动处理" };
+    }
+    if (!clickActionElement(option)) {
+      return { ok: false, reason: "日期选项动作被安全策略拦截" };
+    }
+    return { ok: true };
+  }
+
+  async function selectFeishuDateValue(element, normalized) {
+    const match = normalized.match(/^(\d{4})-(\d{2})$/);
+    if (!match) {
+      return { ok: false, reason: "日期资料缺少可选择的年月" };
+    }
+    if (!clickActionElement(element)) {
+      return { ok: false, reason: "日期控件无法打开" };
+    }
+    const opened = await waitForCondition(() => Boolean(getVisibleFeishuDatePicker()));
+    if (!opened) {
+      return { ok: false, reason: "日期面板未打开" };
+    }
+    let popup = getVisibleFeishuDatePicker();
+    const year = getFeishuDatePartNode(popup, "year", match[1]);
+    if (!year || !clickActionElement(year)) {
+      return { ok: false, reason: `未找到日期年份 ${match[1]}` };
+    }
+    await sleep(80);
+    popup = getVisibleFeishuDatePicker();
+    const month = getFeishuDatePartNode(popup, "month", match[2]);
+    if (!month || !clickActionElement(month)) {
+      return { ok: false, reason: `未找到日期月份 ${match[2]}` };
+    }
     return { ok: true };
   }
 
@@ -5610,6 +6420,48 @@
     return left === right || left.includes(right) || right.includes(left);
   }
 
+  function normalizeChoiceEquivalent(value) {
+    const normalized = normalizeChoiceLabel(normalizeChoiceValue(value));
+    const equivalentGroups = [
+      ["本科", "大学本科"],
+      ["硕士", "硕士研究生"],
+      ["博士", "博士研究生"],
+      ["专科", "大专", "大学专科"]
+    ];
+    for (const group of equivalentGroups) {
+      if (group.includes(normalized)) {
+        return group[0];
+      }
+    }
+    return normalized;
+  }
+
+  function findBestChoiceOption(options, target) {
+    const expected = normalizeChoiceEquivalent(target);
+    const scored = options
+      .map((option) => {
+        const label = getElementText(option) || option.getAttribute("aria-label") || option.getAttribute("data-value") || "";
+        const normalized = normalizeChoiceEquivalent(label);
+        let score = 0;
+        if (normalized && normalized === expected) {
+          score = 2;
+        } else if (choiceTextMatches(label, target)) {
+          score = 1;
+        }
+        return { option, score };
+      })
+      .filter((item) => item.score > 0);
+    if (scored.length === 0) {
+      return { option: null, ambiguous: false };
+    }
+    const bestScore = Math.max(...scored.map((item) => item.score));
+    const best = scored.filter((item) => item.score === bestScore);
+    return {
+      option: best.length === 1 ? best[0].option : null,
+      ambiguous: best.length > 1
+    };
+  }
+
   async function tryFillCustomChoiceField(element, value, field) {
     const container = findChoiceFieldContainer(element);
     if (!container) {
@@ -5617,7 +6469,10 @@
     }
 
     container.scrollIntoView({ block: "center", inline: "nearest" });
-    if (!clickActionElement(element instanceof Element ? element : container)) {
+    const actionTarget = element instanceof Element
+      ? (element.matches?.('[role="combobox"]') ? element : element.querySelector?.('[role="combobox"]') || element)
+      : container;
+    if (!clickActionElement(actionTarget)) {
       return { ok: false, reason: "选择控件动作被安全策略拦截" };
     }
     if (container !== element) {
@@ -5625,16 +6480,23 @@
         return { ok: false, reason: "选择控件动作被安全策略拦截" };
       }
     }
-    await sleep(220);
-
     const target = normalizeChoiceValue(value, inferFieldLabel(field));
     const hierarchicalResult = await tryFillHierarchicalChoiceOptions(value, target, container);
     if (hierarchicalResult.ok) {
       return hierarchicalResult;
     }
 
-    const options = findVisibleChoiceOptions(container);
-    const matched = options.find((option) => choiceTextMatches(getElementText(option), target) || choiceTextMatches(option.getAttribute("aria-label") || "", target));
+    let options = [];
+    let directMatch = { option: null, ambiguous: false };
+    await waitForCondition(() => {
+      options = findVisibleChoiceOptions(container);
+      directMatch = findBestChoiceOption(options, target);
+      return Boolean(directMatch.option || directMatch.ambiguous);
+    }, 2500);
+    const matched = directMatch.option;
+    if (directMatch.ambiguous) {
+      return { ok: false, reason: "匹配到多个下拉选项，需要手动选择" };
+    }
 
     if (matched) {
       if (!clickActionElement(matched)) {
@@ -5650,9 +6512,17 @@
         : container.querySelector?.('input:not([type="hidden"]):not([type="password"]):not([type="file"]),textarea,[contenteditable="true"]');
     if (searchInput) {
       setNativeValue(searchInput, value);
-      await sleep(160);
-      const retryOptions = findVisibleChoiceOptions(container);
-      const retryMatched = retryOptions.find((option) => choiceTextMatches(getElementText(option), target) || choiceTextMatches(option.getAttribute("aria-label") || "", target));
+      let retryOptions = [];
+      let retryMatch = { option: null, ambiguous: false };
+      await waitForCondition(() => {
+        retryOptions = findVisibleChoiceOptions(container);
+        retryMatch = findBestChoiceOption(retryOptions, target);
+        return Boolean(retryMatch.option || retryMatch.ambiguous);
+      }, 2500);
+      const retryMatched = retryMatch.option;
+      if (retryMatch.ambiguous) {
+        return { ok: false, reason: "匹配到多个下拉选项，需要手动选择" };
+      }
       if (retryMatched) {
         if (!clickActionElement(retryMatched)) {
           return { ok: false, reason: "选择控件动作被安全策略拦截" };
@@ -5674,10 +6544,11 @@
     let matchedAny = false;
     for (const part of parts) {
       const options = findVisibleChoiceOptions(container);
-      const matched = options.find((option) => {
-        const text = getElementText(option);
-        return choiceTextMatches(text, part) || choiceTextMatches(text, target);
-      });
+      const match = findBestChoiceOption(options, part);
+      const matched = match.option;
+      if (match.ambiguous) {
+        return { ok: false, reason: "级联选项匹配到多个结果，需要手动选择" };
+      }
       if (!matched) {
         return matchedAny ? { ok: false, reason: "级联选项未完成匹配，需要手动选择" } : { ok: false, reason: "no matching hierarchical option" };
       }
@@ -5739,13 +6610,36 @@
       '[class*="dropdown-item"]'
     ].join(",");
     const roots = [];
+    const controlledRoots = [];
+    let hasControlledRelation = false;
     if (container && container !== document && container.querySelectorAll) {
       roots.push(container);
+
+      // 飞书 ATSX 会把选项弹层挂到 body，并通过 aria-controls/aria-owns
+      // 关联当前控件。优先读取这个关系，避免多个隐藏或残留弹层造成误选。
+      const controlledElements = [
+        ...(container.matches?.("[aria-controls],[aria-owns]") ? [container] : []),
+        ...Array.from(container.querySelectorAll("[aria-controls],[aria-owns]"))
+      ];
+      const controlledIds = controlledElements
+        .flatMap((control) => [control.getAttribute("aria-controls"), control.getAttribute("aria-owns")])
+        .flatMap((value) => String(value || "").split(/\s+/))
+        .filter(Boolean);
+      hasControlledRelation = controlledIds.length > 0;
+      for (const id of controlledIds) {
+        const popup = document.getElementById(id);
+        if (popup && isVisible(popup)) {
+          controlledRoots.push(popup);
+        }
+      }
+      roots.unshift(...controlledRoots);
     }
-    const popupRoots = Array.from(document.querySelectorAll(
-      '[role="listbox"],[role="menu"],[class*="dropdown"],[class*="Dropdown"],[class*="select-dropdown"],[class*="cascader"],[class*="popover"]'
-    )).filter(isVisible);
-    roots.push(...popupRoots);
+    if (!hasControlledRelation) {
+      const popupRoots = Array.from(document.querySelectorAll(
+        '[role="listbox"],[role="menu"],[class*="dropdown"],[class*="Dropdown"],[class*="select-dropdown"],[class*="cascader"],[class*="popover"]'
+      )).filter(isVisible);
+      roots.push(...popupRoots);
+    }
     if (roots.length === 0 && container === document) {
       roots.push(document);
     }
@@ -6232,6 +7126,19 @@
       const direct = document.querySelector(`[${FIELD_ATTR}="${CSS.escape(field.fieldId)}"]`);
       if (direct && isVisible(direct)) {
         return direct;
+      }
+    }
+
+    if (field.dataCy) {
+      try {
+        const dataCyMatches = Array.from(document.querySelectorAll(`[data-cy="${CSS.escape(field.dataCy)}"]`))
+          .filter(isVisible)
+          .filter((element) => getControlType(element) === field.type || field.type === "text");
+        if (dataCyMatches[0]) {
+          return dataCyMatches[0];
+        }
+      } catch {
+        // Ignore malformed data-cy values and continue with the other metadata.
       }
     }
 

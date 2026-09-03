@@ -68,8 +68,17 @@ export function comboboxFixtureHtml({
     </body></html>`;
 }
 
-export async function installContentScript(page, { profile, html }) {
-  await page.setContent(html);
+export async function installContentScript(page, { profile, html, url = "" }) {
+  if (url) {
+    await page.route(`${new URL(url).origin}/**`, (route) => route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: html
+    }));
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+  } else {
+    await page.setContent(html);
+  }
   await page.evaluate(({ profile }) => {
     const listeners = new Set();
     globalThis.chrome = {
