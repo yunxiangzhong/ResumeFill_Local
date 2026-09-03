@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ResumeFill Local",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "本地优先的中文网申简历填写助手",
   "homepage_url": "https://github.com/yunxiangzhong/ResumeFill_Local",
   "permissions": [
